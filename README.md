@@ -10,9 +10,16 @@ application (téléphone et ordinateur) et fonctionne hors connexion.
 
 ## Ce qu'elle fait
 
-- **Horizons** : vue « Ensemble » (une colonne par horizon, chacune navigable
-  dans le temps et repliable) et vue « bande » (un horizon, ses périodes à la
-  suite, « Plus tôt » / « Plus tard »).
+- **Horizons** : vue « Ensemble » (aujourd'hui, la semaine, le mois, l'année…
+  côte à côte, colonnes au choix) calée sur un jour de référence que la
+  pastille « ‹ Aujourd'hui › » fait avancer ou reculer ; la colonne du jour
+  porte sa grille horaire. Vue « bande » : un horizon, ses périodes à la suite,
+  « Plus tôt » / « Plus tard ». Sur téléphone, une période par écran et les
+  horizons en onglets en bas.
+- **Calendrier de vie** : les années de la naissance à 80 ans (réglable), les
+  passées barrées, l'année en cours en rouge, avec ce qui y a été fait
+  (Réflexion) ou ce qui y est prévu (Futur) ; puis l'année en cours jour par
+  jour ; puis les objectifs de vie et de la décennie.
 - **Objectifs liés** : un élément se rattache à un élément d'un horizon plus
   large qui couvre sa période ; le parent affiche « faits / total » et transmet
   sa couleur. Sous-objectifs imbriqués sous n'importe quel élément.
@@ -33,8 +40,8 @@ application (téléphone et ordinateur) et fonctionne hors connexion.
 - **Progrès** : faits du jour, de la semaine, du mois, série, tenue sur 30 jours,
   12 dernières semaines, objectifs suivis.
 - **Recherche**, **À ranger**, **rappels** (notification tant que l'application
-  est ouverte), **thème** clair ou sombre, **export / import / tout effacer**
-  avec annulation.
+  est ouverte), **thème** clair ou sombre, **fond d'écran** (dégradés ou image
+  de l'appareil), **export / import / tout effacer** avec annulation.
 - **Glisser-déposer** à la souris, ou au doigt par appui long (un balayage reste
   un défilement).
 
@@ -44,10 +51,10 @@ application (téléphone et ordinateur) et fonctionne hors connexion.
 |---|---|
 | `N` | Nouvel élément |
 | `/` ou `Ctrl K` | Rechercher |
-| `H` `C` `J` | Horizons, Calendrier, Journée |
+| `H` `C` `J` `V` | Horizons, Calendrier, Journée, Vie |
 | `A` `P` `I` | Ascensions, Progrès, À ranger |
 | `T` | Revenir à aujourd'hui |
-| `←` `→` | Colonne, mois ou jour précédent / suivant |
+| `←` `→` | Jour (Ensemble), période, mois ou jour précédent / suivant |
 | `0` – `7` | Horizons : ensemble, puis jour → vie |
 | `?` | Aide |
 
@@ -92,7 +99,8 @@ npm test
 ordinateur et téléphone : saisie, rattachements, glisser à la souris et au
 doigt, récurrences, report, tableaux, calendrier, grille horaire, ascensions,
 recherche, markdown échappé, espaces, réglages, raccourcis, données abîmées,
-semaines ISO autour du Nouvel An, et absence de toute requête hors du site.
+semaines ISO autour du Nouvel An, calendrier de vie, fond d'écran, et absence
+de toute requête hors du site.
 
 ## Structure
 
@@ -103,7 +111,7 @@ js/main.js            navigation, barre latérale, saisie, raccourcis, réglages
 js/store.js           document de données, sauvegarde locale, rendus, annulation
 js/items.js           éléments : placement, récurrence, report, rattachements
 js/dates.js           périodes (semaines ISO, trimestres, décennies…)
-js/views/*.js         Horizons, tableaux, calendrier, ascensions, progrès, recherche
+js/views/*.js         Horizons, tableaux, calendrier, vie, ascensions, progrès, recherche
 js/dnd.js             glisser-déposer souris et tactile
 sw.js                 fonctionnement hors connexion
 fonts/                police Inter (SIL Open Font License)

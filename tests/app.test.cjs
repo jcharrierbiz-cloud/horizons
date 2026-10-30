@@ -90,9 +90,11 @@ async function drag(page, fromSel, toSel, toOffset) {
   section("démarrage et saisie");
   {
     const { ctx, page, errors } = await fresh(browser);
-    ok((await page.$$("#main .col")).length === 7, "7 horizons côte à côte");
-    const heads = await page.$$eval("#main .col .col-eyebrow", (e) => e.map((x) => x.textContent.split("·")[0].trim()));
-    ok(heads.join(",") === "Jour,Semaine,Mois,Trimestre,Année,Décennie,Vie", "ordre des horizons (" + heads + ")");
+    ok((await page.$$("#main .col")).length === 4, "4 horizons côte à côte par défaut");
+    const heads = await page.$$eval("#main .col .col-title", (e) => e.map((x) => x.textContent.trim()));
+    ok(heads.join(",") === "Aujourd'hui,Semaine,Mois,Année", "ordre des horizons (" + heads + ")");
+    ok(await page.$('[data-col="day|' + T + '"] .tl.mini'), "la colonne du jour porte sa grille horaire");
+    ok(await page.isVisible(".navpill .np-today"), "pastille « Aujourd'hui »");
     ok(/Idées/.test(await page.textContent("#sidebar")), "tableau d'exemple dans la barre latérale");
     await page.click('[data-col="day|' + T + '"] .add-btn');
     await page.keyboard.type("Appeler Paul #client #Urgent");
@@ -116,7 +118,7 @@ async function drag(page, fromSel, toSel, toOffset) {
     // Brouillon validé au clic ailleurs
     await page.click('[data-col="day|' + T + '"] .add-btn');
     await page.keyboard.type("Brouillon perdu ?");
-    await page.click("#main h1");
+    await page.click("#main .col:nth-child(3) .col-title");
     await page.waitForTimeout(150);
     ok(!!(await item(page, "Brouillon perdu ?")), "brouillon validé en cliquant ailleurs");
     ok(errors.length === 0, "aucune erreur JS (1) " + errors.join(" | "));
@@ -184,19 +186,24 @@ async function drag(page, fromSel, toSel, toOffset) {
     s = await st(page);
     ok(s.items.find((x) => x.id === "t1").parent === "", "un parent devenu aussi petit que l'enfant perd le lien");
     await page.click("#sheetClose"); await page.waitForTimeout(300);
-    // Navigation d'une colonne et repli
+    // Pastille : toutes les colonnes suivent le jour de référence
     await page.waitForTimeout(200);
-    if (!(await page.$('[data-act="hzprev"][data-h="day"]'))) console.log("DIAG cols:", await page.$$eval("#main .col", (e) => e.map((x) => x.dataset.col || x.className)), "view:", await page.$eval("#main", (e) => e.dataset.view), "sheet:", await page.isVisible("#sheet.on"));
-    await page.click('[data-act="hzprev"][data-h="day"]');
-    ok(await page.$('[data-col="day|' + Y + '"]'), "colonne du jour reculée d'un jour");
-    await page.click('[data-act="hznow"][data-h="day"]');
-    ok(await page.$('[data-col="day|' + T + '"]'), "titre : retour à aujourd'hui");
-    await page.click('[data-act="hzfold"][data-h="decade"]');
-    ok(await page.$(".col.folded"), "colonne repliée");
-    await page.click('[data-act="hzunfold"][data-h="decade"]');
-    ok(!(await page.$(".col.folded")), "colonne dépliée");
+    await page.click('.navpill [data-act="fprev"]');
+    ok(await page.$('[data-col="day|' + Y + '"]'), "‹ : la colonne du jour recule d'un jour");
+    ok(/Hier/.test(await page.textContent('[data-col="day|' + Y + '"] .col-title')), "titre « Hier »");
+    await page.click('.navpill [data-act="ftoday"]');
+    ok(await page.$('[data-col="day|' + T + '"]'), "« Aujourd'hui » : retour au jour même");
+    const rv = (await st(page)).rev;
+    await page.click('.navpill [data-act="hzmenu"]');
+    await page.click('#menu button:has-text("Trimestre")');
+    ok(await page.$('#main .col[data-col^="quarter|"]'), "colonne du trimestre ajoutée");
+    ok((await page.$$("#main .col")).length === 5, "cinq colonnes");
+    await page.click('.navpill [data-act="hzmenu"]');
+    await page.click('#menu button:has-text("Trimestre")');
+    ok(!(await page.$('#main .col[data-col^="quarter|"]')), "colonne du trimestre retirée");
+    ok((await st(page)).rev === rv, "choisir ses colonnes ne touche pas aux données");
     // Mode bande
-    await page.click('[data-act="hzmode"][data-m="day"]');
+    await page.click('#sidebar [data-sb="mode"][data-m="day"]');
     ok((await page.$$("#main .col")).length === 31, "bande des jours : 31 colonnes");
     const left = await page.evaluate((t) => { const s = document.querySelector(".strip"), c = s.querySelector('[data-col="day|' + t + '"]'); return Math.round(c.getBoundingClientRect().left - s.getBoundingClientRect().left); }, T);
     ok(Math.abs(left) <= 30, "aujourd'hui calé à gauche (" + left + ")");
@@ -204,7 +211,7 @@ async function drag(page, fromSel, toSel, toOffset) {
     await page.click('.strip [data-act="earlier"]');
     await page.waitForTimeout(500);
     ok((await page.$$("#main .col")).length === 45, "plus tôt : 14 jours de plus");
-    await page.click('[data-act="hzmode"][data-m="all"]');
+    await page.click('#sidebar [data-sb="mode"][data-m="all"]');
     ok(errors.length === 0, "aucune erreur JS (2) " + errors.join(" | "));
     await ctx.close();
   }
@@ -272,7 +279,7 @@ async function drag(page, fromSel, toSel, toOffset) {
     ok(s.items.find((x) => x.id === "o3").key !== "2020-W10", "vieille semaine reportée à cette semaine");
     ok(s.items.find((x) => x.id === "o4").key === Y, "une étape d'ascension n'est pas reportée");
     ok(/reporté/.test(await page.textContent("#toastMsg")), "toast de report");
-    ok(/↷ 1/.test(await page.textContent('.it[data-id="o1"]')), "puce « reporté 1 fois »");
+    ok(/reporté 1×/.test(await page.textContent('.it[data-id="o1"]')), "mention « reporté 1× »");
     await ctx.close();
     const seed2 = seedWith([{ id: "o1", title: "Oubliée hier", h: "day", key: Y }], { settings: { carry: false } });
     const r2 = await fresh(browser, {}, seed2, { space: "sp" });
@@ -450,12 +457,13 @@ async function drag(page, fromSel, toSel, toOffset) {
     ok(await page.$('.it[data-id="n1"]'), "retour à l'espace d'origine");
     // Les choix d'affichage n'avancent pas la révision
     const rev = (await st(page)).rev;
-    await page.click('[data-act="hzmode"][data-m="week"]');
-    await page.click('[data-act="hidedone"]');
+    await page.click('#sidebar [data-sb="mode"][data-m="week"]');
+    await page.click('.navpill [data-act="hzmenu"]');
+    await page.click('#menu button:has-text("Masquer")');
     ok((await st(page)).rev === rev, "affichage local : révision inchangée");
-    await page.click('[data-act="hzmode"][data-m="all"]');
+    await page.click('#sidebar [data-sb="mode"][data-m="all"]');
     // Clavier
-    await page.click("#main h1");
+    await page.click("#main .col-title");
     await page.keyboard.press("n");
     ok(await page.isVisible("#qaTitle"), "N : nouvel élément");
     await page.keyboard.type("Par le clavier"); await page.keyboard.press("Enter"); await page.waitForTimeout(200);
@@ -529,13 +537,53 @@ async function drag(page, fromSel, toSel, toOffset) {
     const page = await ctx.newPage();
     await page.clock.setFixedTime(new Date("2026-12-31T10:00:00"));
     await page.goto(U); await page.waitForTimeout(300);
-    ok(await page.$eval('#main .col:nth-child(2) .col-title', (e) => e.textContent) === "Semaine 53", "31 déc. 2026 : semaine 53");
-    ok(/28 déc\. – 3 janv\./.test(await page.$eval('#main .col:nth-child(2) .col-sub', (e) => e.textContent)), "semaine 53 à cheval sur l'année");
-    ok(await page.$eval('#main .col:nth-child(4) .col-title', (e) => e.textContent) === "T4 2026", "trimestre T4");
-    await page.click('[data-act="hznext"][data-h="week"]'); await page.waitForTimeout(150);
-    ok(await page.$eval('#main .col:nth-child(2) .col-title', (e) => e.textContent) === "Semaine 1", "semaine suivante : semaine 1");
-    await page.click('[data-act="hznext"][data-h="quarter"]'); await page.waitForTimeout(150);
-    ok(await page.$eval('#main .col:nth-child(4) .col-title', (e) => e.textContent) === "T1 2027", "trimestre suivant : T1 2027");
+    const sub = (n) => page.$eval('#main .col:nth-child(' + n + ') .col-sub', (e) => e.textContent);
+    ok(/28 déc\. – 3 janv\. · S53/.test(await sub(2)), "31 déc. 2026 : semaine 53, à cheval sur l'année (" + await sub(2) + ")");
+    await page.click('.navpill [data-act="hzmenu"]');
+    await page.click('#menu button:has-text("Trimestre")'); await page.waitForTimeout(150);
+    ok(/^T4 2026/.test(await sub(4)), "trimestre T4 (" + await sub(4) + ")");
+    await page.click('.navpill [data-act="fnext"]'); await page.waitForTimeout(150);
+    ok(/S53/.test(await sub(2)), "1er janv. 2027 : toujours la semaine 53");
+    ok(/^T1 2027/.test(await sub(4)) && (await sub(5)) === "2027", "1er janv. 2027 : T1 2027, année 2027");
+    for (let i = 0; i < 3; i++) { await page.click('.navpill [data-act="fnext"]'); await page.waitForTimeout(120); }
+    ok(/S1$/.test(await sub(2)), "4 janv. 2027 : semaine 1 (" + await sub(2) + ")");
+    await page.keyboard.press("t"); await page.waitForTimeout(150);
+    ok(/S53/.test(await sub(2)), "T : retour au jour même");
+    await ctx.close();
+  }
+
+  /* ── 11. Calendrier de vie, fond d'écran ── */
+  section("vie et fond d'écran");
+  {
+    const seed = seedWith([{ id: "v1", title: "Courir un marathon", h: "life", key: "vie" }, { id: "v2", title: "Fait en mars", h: "day", key: T.slice(0, 4) + "-03-02", done: true, doneAt: T }]);
+    const { ctx, page, errors } = await fresh(browser, {}, seed, { space: "sp" });
+    await page.keyboard.press("v"); await page.waitForTimeout(200);
+    ok(/Vie/.test(await page.textContent("#main h1")), "V : calendrier de vie");
+    ok(await page.isVisible("#lifeBirth"), "demande l'année de naissance");
+    await page.fill("#lifeBirth", "1990"); await page.keyboard.press("Enter"); await page.waitForTimeout(200);
+    ok((await st(page)).settings.birth === 1990, "année de naissance enregistrée");
+    const yNow = +T.slice(0, 4);
+    ok((await page.$$("#main .ly")).length === 80, "80 années affichées");
+    ok(await page.$('.ly.now[data-y="' + yNow + '"]') && await page.$('.ly.past[data-y="' + (yNow - 1) + '"]'), "année en cours marquée, années passées barrées");
+    ok(/1/.test(await page.textContent('.ly[data-y="' + yNow + '"]')), "Réflexion : un élément fait cette année");
+    ok(await page.$('.ld.now[data-d="' + T + '"]') && (await page.$$(".ld-row")).length === 12, "cette année jour par jour, aujourd'hui entouré");
+    ok(await page.$('.life-goals .it[data-id="v1"]'), "objectifs de vie listés");
+    await page.click('.ld[data-d="' + TM + '"]'); await page.waitForTimeout(250);
+    ok(await page.$('#main [data-col="day|' + TM + '"]'), "toucher un jour : les horizons se calent dessus");
+    ok(/Demain/.test(await page.textContent('[data-col="day|' + TM + '"] .col-title')), "colonne « Demain »");
+    await page.click('#sidebar [data-sb="settings"]');
+    await page.click('#sheetBody [data-wall="lagon"]');
+    ok(await page.evaluate(() => document.body.dataset.wall === "lagon"), "fond d'écran appliqué");
+    ok(await page.evaluate(() => JSON.parse(localStorage.getItem("horizons-ui-v1")).wall === "lagon"), "fond d'écran gardé sur l'appareil");
+    await page.click('#sheetBody [data-col="decade"]');
+    ok(await page.evaluate(() => JSON.parse(localStorage.getItem("horizons-ui-v1")).hzCols.includes("decade")), "colonne ajoutée depuis les réglages");
+    await page.click("#sheetClose"); await page.waitForTimeout(300);
+    ok(await page.$('#main .col[data-col^="decade|"]'), "colonne de la décennie affichée");
+    await page.click('#sidebar [data-sb="panel"]');
+    ok(!(await page.isVisible("#sidebar .sb-panel")), "panneau masqué");
+    await page.click('#sidebar [data-sb="panel"]');
+    ok(await page.isVisible("#sidebar .sb-panel"), "panneau réaffiché");
+    ok(errors.length === 0, "aucune erreur JS (11) " + errors.join(" | "));
     await ctx.close();
   }
 
@@ -568,8 +616,13 @@ async function drag(page, fromSel, toSel, toOffset) {
     ok(await page.$eval(".board-x", (e) => e.scrollLeft) > before, "balayage : la bande défile");
     ok(!(await page.$(".drag-ghost")) && (await item(page, "Courir")).h === "day", "balayage : rien ne bouge");
     // Appui long : réordonner dans la colonne
-    await page.click('[data-act="hztoday"]'); await page.waitForTimeout(400);
-    ok(await page.$eval(".board-x", (e) => e.scrollLeft) === 0, "« Aujourd'hui » ramène la bande sur le jour");
+    await page.click('.navpill [data-act="ftoday"]'); await page.waitForTimeout(900);
+    const off = await page.evaluate((t) => { const s = document.querySelector(".strip"), c = s.querySelector('[data-col="day|' + t + '"]'); return Math.round(c.getBoundingClientRect().left - s.getBoundingClientRect().left); }, T);
+    ok(Math.abs(off) <= 20, "« Aujourd'hui » ramène la bande sur le jour (" + off + ")");
+    ok(await page.isVisible(".tabs-b"), "onglets d'horizons en bas");
+    await page.tap('.tabs-b [data-m="week"]'); await page.waitForTimeout(250);
+    ok(await page.$('#main .strip .col[data-col^="week|"]'), "onglet Semaines");
+    await page.tap('.tabs-b [data-m="day"]'); await page.waitForTimeout(400);
     const m2 = await (await page.$('.it[data-id="m2"] .it-body')).boundingBox();
     const m1 = await (await page.$('.it[data-id="m1"]')).boundingBox();
     await touch("touchStart", m2.x + 40, m2.y + 8);
