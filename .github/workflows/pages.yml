@@ -1,6 +1,8 @@
 # Publie l'application sur GitHub Pages à chaque envoi sur main.
 # Prérequis : Settings → Pages → Source : « GitHub Actions ».
-# (Sur un compte gratuit, GitHub Pages n'est disponible que pour un dépôt public.)
+# Sur un compte gratuit, GitHub Pages n'existe que pour un dépôt public : tant
+# que le dépôt est privé, la publication automatique attend sans échouer. Avec
+# un compte payant, on peut la lancer à la main (Actions → Run workflow).
 name: Publier sur GitHub Pages
 
 on:
@@ -19,6 +21,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
