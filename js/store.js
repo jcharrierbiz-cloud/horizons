@@ -42,17 +42,17 @@ export function seed() {
 }
 /* Réglages enregistrés avec les données (donc dans l'export) : ce qui change leur comportement. */
 function defaultSettings() {
-  return { carry: true };
+  return { carry: true, birth: 0, lifespan: 80 };
 }
 
 /* Affichage : propre à chaque appareil, hors de l'export — importer une
    sauvegarde ne change ni la vue, ni le thème, ni les colonnes repliées. */
 const UIKEY = "horizons-ui-v1";
 export const ui = Object.assign({
-  space: "", theme: "system", hideDone: false, hzMode: "all", hzOffsets: {}, hzCollapsed: {},
-  calMonth: "", calMode: "month", lastRoute: "#/horizons",
+  space: "", theme: "system", hideDone: false, hzMode: "all", hzCols: ["day", "week", "month", "year"], focus: "",
+  calMonth: "", calMode: "month", lastRoute: "#/horizons", panel: true, wall: "", lifeMode: "past",
 }, (() => { try { return JSON.parse(localStorage.getItem(UIKEY) || "{}") || {}; } catch (e) { return {}; } })());
-["hzOffsets", "hzCollapsed"].forEach((k) => { if (!ui[k] || typeof ui[k] !== "object") ui[k] = {}; });
+if (!Array.isArray(ui.hzCols) || !ui.hzCols.length) ui.hzCols = ["day", "week", "month", "year"];
 export function saveUI(noRender) {
   try { localStorage.setItem(UIKEY, JSON.stringify(ui)); } catch (e) { /* stockage indisponible */ }
   if (!noRender) scheduleRender();
@@ -151,6 +151,9 @@ export function normalize(d) {
 
   const st = Object.assign(defaultSettings(), s.settings);
   st.carry = st.carry !== false;
+  /* Année de naissance (0 : pas encore donnée) et durée de vie affichée par le calendrier de vie. */
+  st.birth = Number.isInteger(+st.birth) && +st.birth >= 1900 && +st.birth <= new Date().getFullYear() ? +st.birth : 0;
+  st.lifespan = Number.isInteger(+st.lifespan) && +st.lifespan >= 30 && +st.lifespan <= 120 ? +st.lifespan : 80;
   s.settings = st;
 
   /* Champs ajoutés par une version plus récente : conservés tels quels, pour

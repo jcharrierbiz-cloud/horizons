@@ -112,12 +112,14 @@ function move(x, y) {
   if (!zone) { if (d.mark.parentNode) d.mark.remove(); return; }
   zone.classList.add("over");
   if (zone.dataset.zone.startsWith("time:")) {
-    const ppm = +zone.dataset.ppm || 1, zr = zone.getBoundingClientRect();
-    let min = Math.round(((y - d.dy) - zr.top) / ppm / 15) * 15;
-    min = Math.max(0, Math.min(24 * 60 - 15, min));
+    /* La grille peut commencer après minuit (data-base, en minutes). */
+    const ppm = +zone.dataset.ppm || 1, base = +zone.dataset.base || 0, zr = zone.getBoundingClientRect();
+    const span = zr.height / ppm;
+    let min = base + Math.round(((y - d.dy) - zr.top) / ppm / 15) * 15;
+    min = Math.max(base, Math.min(base + span - 15, min));
     d.minutes = min;
     d.mark.className = "dz-time";
-    d.mark.style.top = (min * ppm) + "px";
+    d.mark.style.top = ((min - base) * ppm) + "px";
     d.mark.style.height = Math.max(15, Math.min(d.dur, 24 * 60 - min)) * ppm + "px";
     d.mark.textContent = hm(min);
     if (d.mark.parentNode !== zone) zone.appendChild(d.mark);

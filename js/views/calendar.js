@@ -6,13 +6,13 @@
      planifier » sur une heure, on déplace un bloc, on tire sa poignée pour
      changer sa durée, on touche une plage vide pour créer à cette heure. */
 
-import { esc, toneHex } from "../util.js";
+import { esc } from "../util.js";
 import {
   iso, dNum, today, addDays, weekday, fmtD, isoWeekKey, periodOf, hm, toMin, durLabel, WD_SHORT, periodLabel, where,
 } from "../dates.js";
 import { S, ui, saveUI, commit } from "../store.js";
 import { buildIndex, colItems, effectiveTone, real } from "../items.js";
-import { itemRow, addSlot } from "../render.js";
+import { itemRow, addSlot, timeline } from "../render.js";
 import { icon } from "../ui.js";
 import { quickAdd } from "../sheet-item.js";
 
@@ -38,7 +38,7 @@ export function renderMonth(main) {
     + '<button class="btn ghost sm" data-act="mtoday">Aujourd\'hui</button></div></header>';
 
   html += '<div class="cal-goals" data-zone="' + esc("col:month|" + mk) + '"><span class="lbl">Objectifs du mois</span><div class="dz row">'
-    + goals.map((it) => itemRow(ix, it, { nest: false })).join("") + addSlot("col:month|" + mk, "Objectif") + "</div></div>";
+    + goals.map((it) => itemRow(ix, it, { nest: false })).join("") + addSlot("col:month|" + mk, "Ajouter un objectif…") + "</div></div>";
 
   html += '<div class="cal' + (narrow() ? " mini" : "") + '"><div class="cal-wd">' + WD_SHORT.map((d) => "<span>" + d + "</span>").join("") + "</div><div class=\"cal-grid\">";
   for (let i = 0; i < 42; i++) {
@@ -49,7 +49,7 @@ export function renderMonth(main) {
       + '<div class="cell-h"><button class="cell-n" data-act="openday" data-date="' + d + '">' + dNum(d).getDate() + "</button>"
       + (weekday(d) === 0 ? '<span class="wk">S' + parseInt(isoWeekKey(d).slice(6), 10) + "</span>" : "") + "</div>";
     if (narrow()) {
-      html += '<div class="dots">' + shown.slice(0, 4).map((it) => '<i style="background:' + (toneHex(effectiveTone(ix, it)) || "var(--accent)") + '"' + (it.done ? ' class="d"' : "") + "></i>").join("")
+      html += '<div class="dots">' + shown.slice(0, 4).map((it) => { const t = effectiveTone(ix, it); return '<i class="' + (t ? "t-" + t : "") + (it.done ? " d" : "") + '"></i>'; }).join("")
         + (shown.length > 4 ? "<b>+" + (shown.length - 4) + "</b>" : "") + "</div>";
     } else {
       html += '<div class="dz">' + shown.map((it) => itemRow(ix, it, { nest: false })).join("") + "</div>"
@@ -64,31 +64,9 @@ export function renderMonth(main) {
     const L = periodLabel("day", selDay);
     html += '<section class="col agenda" data-zone="' + esc("col:day|" + selDay) + '"><div class="col-h"><div class="col-eyebrow"><span class="now-tag">' + esc(L.tag || " ") + "</span></div>"
       + '<div class="col-row"><span class="col-title static">' + esc(L.title) + '</span><button class="btn ghost sm" data-act="openday" data-date="' + selDay + '">' + icon("clock") + "Heures</button></div></div>"
-      + '<div class="col-b"><div class="dz">' + items.map((it) => itemRow(ix, it, { dur: true })).join("") + addSlot("col:day|" + selDay, "Ajouter") + "</div></div></section>";
+      + '<div class="col-b"><div class="dz">' + items.map((it) => itemRow(ix, it, { dur: true })).join("") + addSlot("col:day|" + selDay) + "</div></div></section>";
   }
   main.innerHTML = html;
-}
-
-/* Blocs qui se chevauchent : rangés côte à côte. */
-function lanes(blocks) {
-  blocks.sort((a, b) => a.s - b.s || b.e - a.e);
-  let group = [], groupEnd = -1;
-  const flush = () => {
-    const ends = [];
-    group.forEach((b) => {
-      let lane = ends.findIndex((e) => e <= b.s);
-      if (lane < 0) { lane = ends.length; ends.push(b.e); } else ends[lane] = b.e;
-      b.lane = lane;
-    });
-    group.forEach((b) => { b.lanes = ends.length; });
-    group = [];
-  };
-  blocks.forEach((b) => {
-    if (b.s >= groupEnd && group.length) { flush(); groupEnd = -1; }
-    group.push(b); groupEnd = Math.max(groupEnd, b.e);
-  });
-  if (group.length) flush();
-  return blocks;
 }
 
 export function renderDay(main, date) {
@@ -97,8 +75,8 @@ export function renderDay(main, date) {
   const timed = items.filter((x) => x.time && toMin(x.time) != null);
   const loose = items.filter((x) => !x.time || toMin(x.time) == null);
   const L = periodLabel("day", d);
-  let html = '<header class="view-h"><div><h1>' + esc(L.tag ? L.tag + " · " : "") + esc(L.title) + "</h1>"
-    + '<p class="view-sub">Glisse ce qui est à planifier sur une heure. Tire le bas d\'un bloc pour sa durée. Touche une plage libre pour créer.</p></div>'
+  let html = '<header class="view-h"><div><h1>' + esc(L.tag || L.title) + "</h1>"
+    + '<p class="view-sub">' + esc(L.tag ? L.title : "") + (L.tag ? " · " : "") + "Glisse ce qui est à planifier sur une heure, tire le bas d'un bloc pour sa durée, touche une plage libre pour créer.</p></div>"
     + '<div class="view-tools"><div class="seg"><button data-act="calmonth">Mois</button><button aria-pressed="true">Jour</button></div>'
     + '<button class="icon-btn" data-act="dprev" data-date="' + d + '" aria-label="Jour précédent">' + icon("left") + "</button>"
     + '<button class="btn ghost sm" data-act="dtoday">Aujourd\'hui</button>'
@@ -106,21 +84,8 @@ export function renderDay(main, date) {
 
   html += '<div class="dayv"><aside class="col unsched" data-zone="' + esc("unsched:" + d) + '"><div class="col-h"><div class="col-row"><span class="col-title static">À planifier</span>'
     + '<span class="col-count num">' + (loose.length || "") + "</span></div></div>"
-    + '<div class="col-b"><div class="dz">' + loose.map((it) => itemRow(ix, it, { nest: false })).join("") + addSlot("col:day|" + d, "Ajouter") + "</div></div></aside>";
-
-  html += '<div class="tl-wrap" data-autoscroll data-scroll-key="tl"><div class="tl" data-zone="' + esc("time:" + d) + '" data-ppm="' + PPM + '" data-date="' + d + '" style="height:' + 24 * 60 * PPM + 'px">';
-  for (let hh = 0; hh < 24; hh++) html += '<div class="tl-h" style="top:' + hh * 60 * PPM + 'px"><span>' + String(hh).padStart(2, "0") + ":00</span></div>";
-  if (d === t) { const n = new Date(); html += '<div class="tl-now" style="top:' + (n.getHours() * 60 + n.getMinutes()) * PPM + 'px"></div>'; }
-  const blocks = lanes(timed.map((it) => { const s = toMin(it.time); return { it, s, e: Math.min(24 * 60, s + (it.dur || 60)) }; }));
-  blocks.forEach((b) => {
-    const it = b.it, tone = toneHex(effectiveTone(ix, it)) || "";
-    const w = 100 / b.lanes;
-    html += '<div class="blk' + (it.done ? " done" : "") + (it.virtual ? " virtual" : "") + (b.e - b.s < 45 ? " short" : "") + '" data-drag data-id="' + esc(it.id) + '" data-dur="' + (it.dur || 60) + '" style="top:' + b.s * PPM + "px;height:" + Math.max(18, (b.e - b.s) * PPM - 2) + "px;left:calc(" + b.lane * w + "% + 2px);width:calc(" + w + "% - 4px)" + (tone ? ";--tone:" + tone : "") + '">'
-      + '<button class="check" role="checkbox" aria-checked="' + it.done + '" data-act="toggle" aria-label="Fait"></button>'
-      + '<button class="blk-b" data-act="open"><b>' + (it.emoji ? esc(it.emoji) + " " : "") + esc(it.title || "Sans titre") + "</b><span>" + hm(b.s) + " – " + hm(b.e) + " · " + durLabel(b.e - b.s) + "</span></button>"
-      + '<div class="rs" data-rs="' + esc(it.id) + '" aria-label="Changer la durée"></div></div>';
-  });
-  html += "</div></div></div>";
+    + '<div class="col-b"><div class="dz">' + loose.map((it) => itemRow(ix, it, { nest: false })).join("") + addSlot("col:day|" + d) + "</div></div></aside>";
+  html += '<div class="tl-wrap" data-autoscroll data-scroll-key="tl">' + timeline(ix, d, timed, { ppm: PPM, from: 0, to: 24 * 60 }) + "</div></div>";
   main.innerHTML = html;
 
   if (scrolledDay !== d) {
@@ -158,12 +123,12 @@ export function onCellTap(e, main) {
   selDay = c.dataset.date; saveUI(); return true;
 }
 
-/* Plage vide de la grille horaire : créer à cette heure. */
+/* Plage vide d'une grille horaire (vue Journée ou colonne du jour) : créer à cette heure. */
 export function onTimelineTap(e) {
   const tl = e.target.closest(".tl");
   if (!tl || e.target.closest(".blk")) return false;
-  const r = tl.getBoundingClientRect();
-  const min = Math.max(0, Math.min(23 * 60 + 30, Math.floor((e.clientY - r.top) / PPM / 30) * 30));
+  const r = tl.getBoundingClientRect(), ppm = +tl.dataset.ppm || 1, base = +tl.dataset.base || 0;
+  const min = Math.max(base, Math.min(23 * 60 + 30, base + Math.floor((e.clientY - r.top) / ppm / 30) * 30));
   quickAdd({ h: "day", key: tl.dataset.date, extra: { time: hm(min), dur: 60 } });
   return true;
 }
@@ -174,17 +139,17 @@ export function initResize() {
   document.addEventListener("pointerdown", (e) => {
     const h = e.target.closest(".rs"); if (!h) return;
     e.preventDefault(); e.stopPropagation();
-    const blk = h.closest(".blk");
-    rs = { id: h.dataset.rs, blk, y: e.clientY, h0: blk.getBoundingClientRect().height, pid: e.pointerId };
+    const blk = h.closest(".blk"), tl = blk.closest("[data-ppm]");
+    rs = { id: h.dataset.rs, blk, y: e.clientY, h0: blk.getBoundingClientRect().height, ppm: tl ? +tl.dataset.ppm || 1 : 1 };
     try { h.setPointerCapture(e.pointerId); } catch (err) { /* sans capture */ }
     document.body.classList.add("resizing");
   });
   document.addEventListener("pointermove", (e) => {
     if (!rs) return;
-    const px = Math.max(15 * PPM, rs.h0 + (e.clientY - rs.y));
+    const px = Math.max(15 * rs.ppm, rs.h0 + (e.clientY - rs.y));
     rs.blk.style.height = px + "px";
-    rs.min = Math.max(15, Math.round(px / PPM / 15) * 15);
-    const span = rs.blk.querySelector(".blk-b span"); if (span) span.textContent = durLabel(rs.min);
+    rs.min = Math.max(15, Math.round(px / rs.ppm / 15) * 15);
+    const span = rs.blk.querySelector(".blk-t"); if (span) span.textContent = durLabel(rs.min);
   });
   const end = () => {
     if (!rs) return;

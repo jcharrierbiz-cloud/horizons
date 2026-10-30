@@ -19,16 +19,17 @@ import * as CV from "./views/calendar.js";
 import * as KV from "./views/climbs.js";
 import * as PV from "./views/progress.js";
 import * as SV from "./views/search.js";
+import * as LV from "./views/life.js";
 
 /* ── Route ── */
 function route() {
   const h = location.hash || ui.lastRoute || "#/horizons";
   const parts = h.replace(/^#\/?/, "").split("/");
   const v = parts[0] || "horizons";
-  const known = ["horizons", "cal", "day", "b", "climbs", "progress", "search", "inbox"];
+  const known = ["horizons", "cal", "day", "life", "b", "climbs", "progress", "search", "inbox"];
   return { view: known.includes(v) ? v : "horizons", arg: parts.slice(1).join("/") };
 }
-const TITLES = { horizons: "Horizons", cal: "Calendrier", day: "Journée", b: "Tableau", climbs: "Ascensions", progress: "Progrès", search: "Recherche", inbox: "À ranger" };
+const TITLES = { horizons: "Horizons", cal: "Calendrier", day: "Journée", life: "Vie", b: "Tableau", climbs: "Ascensions", progress: "Progrès", search: "Recherche", inbox: "À ranger" };
 
 /* ── Saisie rapide en bas de colonne ── */
 let addState = null;   // { dest, value }
@@ -84,6 +85,7 @@ function render() {
   switch (r.view) {
     case "cal": CV.renderMonth(m); break;
     case "day": CV.renderDay(m, r.arg === "today" ? today() : r.arg); break;
+    case "life": LV.render(m); break;
     case "b": BV.render(m, r.arg); break;
     case "climbs": KV.render(m); break;
     case "progress": PV.render(m); break;
@@ -111,35 +113,48 @@ function render() {
   renderSidebar();
 }
 
-/* ── Barre latérale ── */
+/* ── Barre latérale : un rail d'icônes, puis un panneau (espaces, horizons, tableaux) ── */
+const MODES = [["all", "Ensemble"]].concat(HZ.map((x) => [x.id, x.many]));
 function renderSidebar() {
   const r = route(), sp = space();
   const boards = S.state.boards.filter((b) => b.spaceId === sp.id);
   const inbox = S.state.items.filter((x) => x.spaceId === sp.id && !x.h && !x.boardId && !x.parent && !x.repeat && !x.done).length;
-  const link = (hash, ic, label, extra, zone) => {
-    const on = ("#/" + r.view + (r.arg && r.view === "b" ? "/" + r.arg : "")) === hash || (hash === "#/day/today" && r.view === "day");
-    return '<a class="nav' + (on ? " on" : "") + '" href="' + hash + '"' + (zone ? ' data-zone="' + esc(zone) + '"' : "") + ">" + ic + "<span>" + esc(label) + "</span>" + (extra || "") + "</a>";
+  const here = "#/" + r.view + (r.arg && r.view === "b" ? "/" + r.arg : "");
+  const rl = (hash, ic, label, extra, zone) => {
+    const on = here === hash || (hash === "#/day/today" && r.view === "day");
+    return '<a class="rl' + (on ? " on" : "") + '" href="' + hash + '" title="' + esc(label) + '"' + (zone ? ' data-zone="' + esc(zone) + '"' : "") + ">"
+      + ic + '<span class="rl-t">' + esc(label) + "</span>" + (extra || "") + "</a>";
   };
-  $("#sidebar").innerHTML = '<div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span><b>Horizons</b></div>'
+  const link = (hash, ic, label, extra, zone) => '<a class="nav' + (here === hash ? " on" : "") + '" href="' + hash + '"' + (zone ? ' data-zone="' + esc(zone) + '"' : "") + ">"
+    + ic + "<span>" + esc(label) + "</span>" + (extra || "") + "</a>";
+  const mode = r.view === "horizons" ? HV.shownMode() : "";
+  document.body.classList.toggle("nopanel", !ui.panel);
+  $("#sidebar").innerHTML = '<div class="rail">'
+    + '<button class="rl brand-btn" data-sb="panel" title="Afficher ou masquer le panneau" aria-label="Afficher ou masquer le panneau" aria-expanded="' + !!ui.panel + '">'
+    + '<span class="logo" aria-hidden="true"><i></i><i></i><i></i></span></button>'
+    + '<button class="rl add" data-sb="add" title="Nouvel élément (N)">' + icon("plus") + '<span class="rl-t">Nouvel élément</span></button>'
+    + rl("#/horizons", icon("horizons"), "Horizons")
+    + rl("#/cal", icon("calendar"), "Calendrier")
+    + rl("#/day/today", icon("clock"), "Journée")
+    + rl("#/life", icon("life"), "Vie")
+    + rl("#/inbox", icon("list"), "À ranger", inbox ? '<span class="cnt">' + inbox + "</span>" : "", "inbox")
+    + rl("#/climbs", icon("climb"), "Ascensions")
+    + rl("#/progress", icon("chart"), "Progrès")
+    + rl("#/search", icon("search"), "Recherche")
+    + '<span class="rl-gap"></span>'
+    + '<button class="rl" data-sb="settings" title="Réglages">' + icon("settings") + '<span class="rl-t">Réglages</span></button>'
+    + '<button class="rl" data-sb="export" title="Sauvegarder">' + icon("download") + '<span class="rl-t">Sauvegarder</span></button>'
+    + "</div>"
+    + '<div class="sb-panel"><div class="brand"><b>Horizons</b></div>'
     + '<div class="spaces">' + S.state.spaces.map((s) => '<button class="space' + (s.id === sp.id ? " on" : "") + '" data-space="' + s.id + '" title="' + esc(s.name) + '">'
       + (s.emoji ? esc(s.emoji) + " " : "") + esc(s.name) + "</button>").join("")
     + '<button class="space add" data-sb="space-add" aria-label="Nouvel espace">' + icon("plus") + "</button></div>"
-    + '<button class="btn primary block" data-sb="add">' + icon("plus") + 'Nouvel élément <kbd>N</kbd></button>'
-    + '<nav class="sb-nav">'
-    + link("#/horizons", icon("horizons"), "Horizons")
-    + link("#/cal", icon("calendar"), "Calendrier")
-    + link("#/day/today", icon("clock"), "Journée")
-    + link("#/inbox", icon("list"), "À ranger", inbox ? '<span class="cnt">' + inbox + "</span>" : "", "inbox")
-    + link("#/climbs", icon("climb"), "Ascensions")
-    + link("#/progress", icon("chart"), "Progrès")
-    + link("#/search", icon("search"), "Recherche", "<kbd>/</kbd>")
-    + "</nav>"
+    + '<div class="sb-h"><span>Horizons</span></div><nav class="sb-nav">'
+    + MODES.map(([m, label]) => '<button class="nav' + (mode === m ? " on" : "") + '" data-sb="mode" data-m="' + m + '"><span>' + esc(label) + "</span></button>").join("") + "</nav>"
     + '<div class="sb-h"><span>Tableaux</span><button class="icon-btn sm" data-sb="board-add" aria-label="Nouveau tableau">' + icon("plus") + "</button></div>"
     + '<nav class="sb-nav boards">' + (boards.length ? boards.map((b) => link("#/b/" + b.id, b.emoji ? '<span class="emo">' + esc(b.emoji) + "</span>" : icon("board"), b.name,
       '<span class="cnt">' + S.state.items.filter((x) => x.boardId === b.id && !x.done).length + "</span>", "board:" + b.id)).join("")
-      : '<p class="hint">Aucun tableau.</p>') + "</nav>"
-    + '<div class="sb-foot"><button class="nav" data-sb="settings">' + icon("settings") + "<span>Réglages</span></button>"
-    + '<button class="nav" data-sb="export">' + icon("download") + "<span>Sauvegarder</span></button></div>";
+      : '<p class="hint">Aucun tableau.</p>') + "</nav></div>";
 }
 
 /* ── Glisser-déposer : où l'élément atterrit ── */
@@ -170,7 +185,7 @@ function onDrop(d) {
 /* ── Événements de la zone principale ── */
 async function onMainClick(e) {
   const m = main(), r = route();
-  if (r.view === "day" && CV.onTimelineTap(e)) return;
+  if (CV.onTimelineTap(e)) return;
   const b = e.target.closest("button, a[data-act]");
   if (!b) { if (r.view === "cal") CV.onCellTap(e, m); return; }
   const act = b.dataset.act;
@@ -190,6 +205,7 @@ async function onMainClick(e) {
   if (r.view === "horizons" && HV.onAct(act, b, m)) return;
   if (r.view === "b" && await BV.onAct(act, b, m, r.arg)) return;
   if ((r.view === "cal" || r.view === "day") && CV.onAct(act, b, m)) return;
+  if (r.view === "life" && LV.onAct(act, b, m)) return;
   if (r.view === "climbs" && await KV.onAct(act, b)) return;
   if (r.view === "search") SV.onAct(act);
 }
@@ -200,6 +216,7 @@ function onKey(e) {
     else if (e.key === "Escape") { e.preventDefault(); e.target.value = ""; commitAdd(e.target, false); }
     return;
   }
+  if (LV.onKey(e, main())) return;
   if (isSheetOpen() || !$("#dialog").hidden || !$("#menu").hidden || isTyping(e.target) || e.altKey) return;
   const mod = e.metaKey || e.ctrlKey, r = route(), k = e.key;
   if (mod && k.toLowerCase() === "k") { e.preventDefault(); go("#/search"); setTimeout(SV.focusSearch, 30); return; }
@@ -207,17 +224,18 @@ function onKey(e) {
   if (k === "/") { e.preventDefault(); go("#/search"); setTimeout(SV.focusSearch, 30); return; }
   if (k === "n" || k === "N" || k === "+") { e.preventDefault(); addHere(); return; }
   if (k === "?") { e.preventDefault(); shortcuts(); return; }
-  const nav = { h: "#/horizons", c: "#/cal", j: "#/day/today", a: "#/climbs", p: "#/progress", i: "#/inbox" }[k.toLowerCase()];
+  const nav = { h: "#/horizons", c: "#/cal", j: "#/day/today", v: "#/life", a: "#/climbs", p: "#/progress", i: "#/inbox" }[k.toLowerCase()];
   if (nav) { e.preventDefault(); go(nav); return; }
   if (k === "t" || k === "T") {
-    if (r.view === "horizons") HV.onAct("hztoday", { dataset: {} }, main());
+    if (r.view === "horizons") HV.onAct("ftoday", { dataset: {} }, main());
     else if (r.view === "cal") CV.onAct("mtoday", { dataset: {} }, main());
     else if (r.view === "day") go("#/day/" + today());
     return;
   }
   if (k === "ArrowLeft" || k === "ArrowRight") {
     const dir = k === "ArrowLeft" ? -1 : 1;
-    if (r.view === "horizons" || r.view === "b") { e.preventDefault(); HV.stepColumns(dir); }
+    if (r.view === "horizons") { e.preventDefault(); HV.onAct(dir < 0 ? "fprev" : "fnext", { dataset: {} }, main()); }
+    else if (r.view === "b") { e.preventDefault(); HV.stepColumns(dir); }
     else if (r.view === "cal") CV.onAct(dir < 0 ? "mprev" : "mnext", { dataset: {} }, main());
     else if (r.view === "day") go("#/day/" + addDays(r.arg === "today" || !r.arg ? today() : r.arg, dir));
     return;
@@ -237,13 +255,14 @@ function addHere() {
     if (b) return quickAdd({ h: null, extra: { boardId: b.id, listId: b.lists[0].id } });
   }
   if (r.view === "inbox") return quickAdd({ h: null });
-  if (r.view === "horizons" && ui.hzMode !== "all") return quickAdd({ h: ui.hzMode });
+  if (r.view === "horizons" && HV.shownMode() !== "all") return quickAdd({ h: HV.shownMode() });
+  if (r.view === "horizons") return quickAdd({ h: "day", key: HV.focusDate() });
   return quickAdd({ h: "day" });
 }
 
 function shortcuts() {
-  const rows = [["N", "Nouvel élément"], ["/ ou Ctrl K", "Rechercher"], ["H · C · J", "Horizons · Calendrier · Journée"], ["A · P · I", "Ascensions · Progrès · À ranger"],
-    ["T", "Revenir à aujourd'hui"], ["← →", "Colonne, mois ou jour précédent / suivant"], ["0 – 7", "Horizons : ensemble, puis jour → vie"], ["Échap", "Fermer"], ["?", "Cette aide"]];
+  const rows = [["N", "Nouvel élément"], ["/ ou Ctrl K", "Rechercher"], ["H · C · J · V", "Horizons · Calendrier · Journée · Vie"], ["A · P · I", "Ascensions · Progrès · À ranger"],
+    ["T", "Revenir à aujourd'hui"], ["← →", "Jour, période, mois précédent / suivant"], ["0 – 7", "Horizons : ensemble, puis jour → vie"], ["Échap", "Fermer"], ["?", "Cette aide"]];
   openSheet("Raccourcis clavier", '<table class="keys">' + rows.map(([a, b]) => "<tr><td><kbd>" + esc(a) + "</kbd></td><td>" + esc(b) + "</td></tr>").join("") + "</table>", {});
 }
 
@@ -254,6 +273,14 @@ function openSettings() {
   const notif = "Notification" in window ? Notification.permission : "absent";
   const html = '<div class="f-sec"><div class="lbl">Apparence</div><div class="seg">'
     + [["light", "Clair"], ["dark", "Sombre"], ["system", "Système"]].map(([v, l]) => '<button data-theme="' + v + '" aria-pressed="' + (ui.theme === v) + '">' + l + "</button>").join("") + "</div></div>"
+    + '<div class="f-sec"><div class="lbl">Fond d\'écran</div><div class="walls">'
+    + WALLS.map(([v, l]) => '<button class="wall-sw" data-wall="' + v + '" data-w="' + v + '" aria-pressed="' + ((ui.wall || "") === v) + '"><span>' + l + "</span></button>").join("")
+    + '</div><input type="file" id="wallFile" accept="image/*" hidden></div>'
+    + '<div class="f-sec"><div class="lbl">Colonnes de l\'ensemble</div><div class="seg wrap">'
+    + HZ.map((x) => '<button data-col="' + x.id + '" aria-pressed="' + HV.visibleCols().includes(x.id) + '">' + x.one + "</button>").join("") + "</div></div>"
+    + '<div class="f-sec"><div class="lbl">Calendrier de vie</div><div class="f-grid">'
+    + '<label><span class="lbl">Année de naissance</span><input type="number" id="setBirth" inputmode="numeric" min="1900" max="' + new Date().getFullYear() + '" value="' + (st.birth || "") + '"></label>'
+    + '<label><span class="lbl">Horizon (ans)</span><input type="number" id="setSpan" inputmode="numeric" min="30" max="120" value="' + st.lifespan + '"></label></div></div>'
     + '<div class="f-sec"><label class="switch"><input type="checkbox" id="setCarry"' + (st.carry ? " checked" : "") + '><span><b>Reporter ce qui n\'est pas fait</b>'
     + "<small>Un élément non coché d'une période passée glisse dans la période en cours du même horizon (sauf les séries et les ascensions). Désactivé, il reste en retard à sa place.</small></span></label></div>"
     + '<div class="f-sec"><div class="lbl">Espaces</div><p class="hint">Chaque espace a ses horizons et ses tableaux : par exemple Personnel et Travail.</p>'
@@ -274,6 +301,15 @@ function openSettings() {
   body.onclick = async (e) => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.theme) { ui.theme = b.dataset.theme; saveUI(true); applyTheme(); openSettings(); return; }
+    if (b.dataset.wall != null) {
+      if (b.dataset.wall === "custom") { $("#wallFile").click(); return; }
+      ui.wall = b.dataset.wall; saveUI(true); applyWall(); openSettings(); return;
+    }
+    if (b.dataset.col) {
+      const cols = HV.visibleCols(), id = b.dataset.col, next = cols.includes(id) ? cols.filter((x) => x !== id) : cols.concat(id);
+      if (!next.length) { toast("Il faut au moins une colonne."); return; }
+      ui.hzCols = next; saveUI(); openSettings(); return;
+    }
     if (b.dataset.spRen) {
       const s = S.state.spaces.find((x) => x.id === b.dataset.spRen);
       const v = await promptText("Nom de l'espace", s.name); if (v) { s.name = v; commit(); openSettings(); }
@@ -304,6 +340,13 @@ function openSettings() {
     if (a === "install" && installEvt) { const ev = installEvt; installEvt = null; ev.prompt(); closeSheet(); }
   };
   body.onchange = (e) => {
+    if (e.target.id === "wallFile" && e.target.files[0]) { loadWall(e.target.files[0]); return; }
+    if (e.target.id === "setBirth" || e.target.id === "setSpan") {
+      const v = Math.round(+e.target.value);
+      if (e.target.id === "setBirth") st.birth = v >= 1900 && v <= new Date().getFullYear() ? v : 0;
+      else st.lifespan = v >= 30 && v <= 120 ? v : 80;
+      commit(); return;
+    }
     if (e.target.id === "setCarry") {
       st.carry = e.target.checked; commit();
       if (st.carry) runCarry();
@@ -369,7 +412,33 @@ function applyTheme() {
   const root = document.documentElement;
   if (ui.theme === "light" || ui.theme === "dark") root.dataset.theme = ui.theme; else delete root.dataset.theme;
   const dark = ui.theme === "dark" || (ui.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = dark ? "#16171b" : "#f6f5f2";
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = dark ? "#141416" : "#ffffff";
+}
+
+/* ── Fond d'écran : un dégradé maison, ou une image de l'appareil (gardée sur l'appareil) ── */
+const WALLS = [["", "Aucun"], ["aube", "Aube"], ["brume", "Brume"], ["lagon", "Lagon"], ["nuit", "Nuit"], ["custom", "Ton image"]];
+const WALL_KEY = "horizons-wall-v1";
+function applyWall() {
+  const b = document.body;
+  let w = WALLS.some(([v]) => v === ui.wall) ? ui.wall : "";
+  let src = "";
+  if (w === "custom") { try { src = localStorage.getItem(WALL_KEY) || ""; } catch (e) { src = ""; } if (!src) w = ""; }
+  if (src) b.style.setProperty("--wall-img", 'url("' + src + '")'); else b.style.removeProperty("--wall-img");
+  if (w) b.dataset.wall = w; else delete b.dataset.wall;
+}
+/* L'image est réduite (2000 px au plus) pour tenir dans le stockage du navigateur. */
+function loadWall(file) {
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => {
+    const k = Math.min(1, 2000 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    try { localStorage.setItem(WALL_KEY, c.toDataURL("image/jpeg", 0.84)); } catch (e) { toast("Image trop lourde pour ce navigateur."); return; }
+    ui.wall = "custom"; saveUI(true); applyWall(); openSettings();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast("Image illisible."); };
+  img.src = url;
 }
 
 /* ── Report automatique, rappels, changement de jour ── */
@@ -425,7 +494,10 @@ function showDue(list) {
 function start() {
   load();
   if (!S.state.spaces.some((s) => s.id === ui.space)) { ui.space = S.state.spaces[0].id; saveUI(true); }
+  /* Chaque ouverture repart d'aujourd'hui, même si l'on s'était promené dans le temps. */
+  if (ui.focus) { ui.focus = ""; saveUI(true); }
   applyTheme();
+  applyWall();
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
   initToast();
   initDnd(onDrop);
@@ -458,6 +530,11 @@ function start() {
     }
     const a = b.dataset.sb;
     if (a === "add") { closeDrawer(); addHere(); return; }
+    if (a === "panel") {
+      if (document.body.classList.contains("drawer")) { closeDrawer(); return; }
+      ui.panel = !ui.panel; saveUI(); return;
+    }
+    if (a === "mode") { ui.hzMode = b.dataset.m; HV.requestScrollNow(); saveUI(true); closeDrawer(); go("#/horizons"); return; }
     if (a === "space-add") { await addSpace(); return; }
     if (a === "board-add") {
       const v = await promptText("Nom du nouveau tableau", "", "Créer");
