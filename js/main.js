@@ -20,16 +20,17 @@ import * as KV from "./views/climbs.js";
 import * as PV from "./views/progress.js";
 import * as SV from "./views/search.js";
 import * as LV from "./views/life.js";
+import * as GV from "./views/guide.js";
 
 /* ── Route ── */
 function route() {
   const h = location.hash || ui.lastRoute || "#/horizons";
   const parts = h.replace(/^#\/?/, "").split("/");
   const v = parts[0] || "horizons";
-  const known = ["horizons", "cal", "day", "life", "b", "climbs", "progress", "search", "inbox"];
+  const known = ["horizons", "cal", "day", "life", "b", "climbs", "progress", "search", "inbox", "guide"];
   return { view: known.includes(v) ? v : "horizons", arg: parts.slice(1).join("/") };
 }
-const TITLES = { horizons: "Horizons", cal: "Calendrier", day: "Journée", life: "Vie", b: "Tableau", climbs: "Ascensions", progress: "Progrès", search: "Recherche", inbox: "À ranger" };
+const TITLES = { horizons: "Horizons", cal: "Calendrier", day: "Journée", life: "Vie", b: "Tableau", climbs: "Ascensions", progress: "Progrès", search: "Recherche", inbox: "À ranger", guide: "Mode d'emploi" };
 
 /* ── Saisie rapide en bas de colonne ── */
 let addState = null;   // { dest, value }
@@ -86,6 +87,7 @@ function render() {
     case "cal": CV.renderMonth(m); break;
     case "day": CV.renderDay(m, r.arg === "today" ? today() : r.arg); break;
     case "life": LV.render(m); break;
+    case "guide": GV.render(m); break;
     case "b": BV.render(m, r.arg); break;
     case "climbs": KV.render(m); break;
     case "progress": PV.render(m); break;
@@ -142,6 +144,7 @@ function renderSidebar() {
     + rl("#/progress", icon("chart"), "Progrès")
     + rl("#/search", icon("search"), "Recherche")
     + '<span class="rl-gap"></span>'
+    + rl("#/guide", icon("help"), "Mode d'emploi")
     + '<button class="rl" data-sb="settings" title="Réglages">' + icon("settings") + '<span class="rl-t">Réglages</span></button>'
     + '<button class="rl" data-sb="export" title="Sauvegarder">' + icon("download") + '<span class="rl-t">Sauvegarder</span></button>'
     + "</div>"
@@ -206,6 +209,7 @@ async function onMainClick(e) {
   if (r.view === "b" && await BV.onAct(act, b, m, r.arg)) return;
   if ((r.view === "cal" || r.view === "day") && CV.onAct(act, b, m)) return;
   if (r.view === "life" && LV.onAct(act, b, m)) return;
+  if (r.view === "guide" && await GV.onAct(act, b, m, { exportData })) return;
   if (r.view === "climbs" && await KV.onAct(act, b)) return;
   if (r.view === "search") SV.onAct(act);
 }
@@ -263,7 +267,9 @@ function addHere() {
 function shortcuts() {
   const rows = [["N", "Nouvel élément"], ["/ ou Ctrl K", "Rechercher"], ["H · C · J · V", "Horizons · Calendrier · Journée · Vie"], ["A · P · I", "Ascensions · Progrès · À ranger"],
     ["T", "Revenir à aujourd'hui"], ["← →", "Jour, période, mois précédent / suivant"], ["0 – 7", "Horizons : ensemble, puis jour → vie"], ["Échap", "Fermer"], ["?", "Cette aide"]];
-  openSheet("Raccourcis clavier", '<table class="keys">' + rows.map(([a, b]) => "<tr><td><kbd>" + esc(a) + "</kbd></td><td>" + esc(b) + "</td></tr>").join("") + "</table>", {});
+  const body = openSheet("Raccourcis clavier", '<table class="keys">' + rows.map(([a, b]) => "<tr><td><kbd>" + esc(a) + "</kbd></td><td>" + esc(b) + "</td></tr>").join("") + "</table>"
+    + '<div class="f-acts"><a class="btn ghost sm" href="#/guide" data-x="guide">' + icon("help") + "Mode d'emploi complet</a></div>", {});
+  body.onclick = (e) => { if (e.target.closest('[data-x="guide"]')) closeSheet(); };
 }
 
 /* ── Réglages ── */
@@ -295,7 +301,8 @@ function openSettings() {
       : "<b>Stockage local indisponible ici : rien ne survivra à la fermeture.</b> Exporte à la main.") + "</p>"
     + '<div class="f-acts"><button class="btn ghost sm" data-set="export">' + icon("download") + 'Exporter</button><button class="btn ghost sm" data-set="import">' + icon("upload") + "Importer</button>"
     + '<button class="btn ghost sm danger-t" data-set="reset">Tout effacer</button></div><input type="file" id="impFile" accept="application/json,.json" hidden></div>'
-    + '<div class="f-sec"><div class="f-acts"><button class="btn ghost sm" data-set="keys">' + icon("keyboard") + "Raccourcis clavier</button>"
+    + '<div class="f-sec"><div class="f-acts"><button class="btn ghost sm" data-set="guide">' + icon("help") + "Mode d'emploi</button>"
+    + '<button class="btn ghost sm" data-set="keys">' + icon("keyboard") + "Raccourcis clavier</button>"
     + (installEvt ? '<button class="btn ghost sm" data-set="install">Installer l\'application</button>' : "") + "</div></div>";
   const body = openSheet("Réglages", html, {});
   body.onclick = async (e) => {
@@ -337,6 +344,7 @@ function openSettings() {
       toast("Tout a été effacé", () => replaceState(backup, false));
     }
     if (a === "keys") shortcuts();
+    if (a === "guide") { closeSheet(); go("#/guide"); }
     if (a === "install" && installEvt) { const ev = installEvt; installEvt = null; ev.prompt(); closeSheet(); }
   };
   body.onchange = (e) => {
