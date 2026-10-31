@@ -105,7 +105,7 @@ export function onAct(act, el, main) {
     }
     case "mtoday": ui.calMonth = ""; selDay = today(); saveUI(); return true;
     case "openday":
-      if (narrow() && main.querySelector(".cal") && el.closest(".cell")) { selDay = el.dataset.date; saveUI(); return true; }
+      if (narrow() && main.querySelector(".cal") && el.closest(".cell")) { pick(el.dataset.date); return true; }
       location.hash = "#/day/" + el.dataset.date; return true;
     case "caladd": quickAdd({ h: "day", key: el.dataset.date }); return true;
     case "calday": location.hash = "#/day/" + (selDay || today()); return true;
@@ -116,11 +116,16 @@ export function onAct(act, el, main) {
   return false;
 }
 
-/* Sur téléphone, toucher une case choisit le jour. */
+/* Sur téléphone, toucher une case choisit le jour ; un jour du mois voisin fait passer à ce mois. */
+function pick(d) {
+  selDay = d;
+  if (d.slice(0, 7) !== monthKey()) ui.calMonth = d.slice(0, 7);
+  saveUI();
+}
 export function onCellTap(e, main) {
   if (!narrow()) return false;
   const c = e.target.closest(".cal .cell"); if (!c) return false;
-  selDay = c.dataset.date; saveUI(); return true;
+  pick(c.dataset.date); return true;
 }
 
 /* Plage vide d'une grille horaire (vue Journée ou colonne du jour) : créer à cette heure. */
