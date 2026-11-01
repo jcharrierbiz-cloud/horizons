@@ -427,6 +427,15 @@ a.g-card:hover { background: var(--hover); }
 .g-act { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
 .g-act .chip.ok { font-size: 12.5px; padding: 2px 9px; }
 .g-warn { border-left: 3px solid var(--now); background: color-mix(in srgb, var(--now) 7%, transparent); border-radius: 0 var(--r-lg) var(--r-lg) 0; padding: 14px 18px; }
+.g-ok { border-left: 3px solid var(--ok); background: color-mix(in srgb, var(--ok) 8%, transparent); border-radius: 0 var(--r-lg) var(--r-lg) 0; padding: 14px 18px; }
+
+/* ── Synchronisation ── */
+.sync-who { font-size: 14px; margin-bottom: 2px; }
+.sync-dot { display: none; position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); box-shadow: 0 0 0 2px var(--side); }
+body[data-sync="sync"] .sync-dot, body[data-sync="wait"] .sync-dot { display: block; background: var(--focus); }
+body[data-sync="offline"] .sync-dot { display: block; background: var(--faint); }
+body[data-sync="error"] .sync-dot { display: block; background: var(--now); }
+@media (max-width: 900px) { .sync-dot { position: static; margin-left: auto; box-shadow: none; } }
 body[data-wall] .guide { background: color-mix(in srgb, var(--bg) 86%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-radius: 14px; padding: 16px 22px 40px; }
 body[data-wall] .guide .view-h { background: none; padding: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
 

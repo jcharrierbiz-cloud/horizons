@@ -4,12 +4,14 @@
 
 import { uid, deepCopy } from "./util.js";
 import { HZ, hzIdx, validKey, periodOf, today, toMin } from "./dates.js";
+import { snapOf, stampChanges, pruneGone } from "./sync-merge.js";
 
 const KEY = "horizons-v1";
 export let storageOK = true;
 
 export const S = { state: null };   // S.state est le document courant
 let applying = false;
+let lastSnap = new Map();   // empreinte des entités au dernier enregistrement, pour dater ce qui change
 const hooks = { render: [], afterSave: [] };
 
 /* ── Stockage ── */
@@ -156,6 +158,11 @@ export function normalize(d) {
   st.lifespan = Number.isInteger(+st.lifespan) && +st.lifespan >= 30 && +st.lifespan <= 120 ? +st.lifespan : 80;
   s.settings = st;
 
+  /* Dates de modification et pierres tombales, pour fusionner les versions de plusieurs appareils. */
+  const num = (o) => { const r = {}; if (o && typeof o === "object") Object.keys(o).forEach((k) => { if (typeof o[k] === "number" && o[k] > 0) r[k] = o[k]; }); return r; };
+  s.stamps = num(d.stamps);
+  s.gone = pruneGone(num(d.gone), Date.now());
+
   /* Champs ajoutés par une version plus récente : conservés tels quels, pour
      qu'une sauvegarde importée dans une version plus ancienne ne les perde pas. */
   Object.keys(d).forEach((k) => { if (!(k in s)) s[k] = d[k]; });
@@ -165,7 +172,8 @@ export function normalize(d) {
 export function load() {
   storageOK = probe();
   const saved = readRaw();
-  S.state = saved ? normalize(saved) : seed();
+  S.state = saved ? normalize(saved) : normalize(seed());
+  lastSnap = snapOf(S.state);
   writeLocal();   // la version réparée remplace aussitôt celle qui était abîmée
 }
 function writeLocal() {
@@ -178,7 +186,8 @@ export function commit(opts) {
   if (!applying) {
     S.state.rev = (S.state.rev || 0) + 1;
     S.state.touchedAt = new Date().toISOString();
-  }
+    lastSnap = stampChanges(S.state, lastSnap, Date.now());
+  } else lastSnap = snapOf(S.state);   // version reçue d'un autre appareil : déjà datée
   writeLocal();
   if (!applying) hooks.afterSave.forEach((f) => f());
   if (!(opts && opts.silent)) scheduleRender();

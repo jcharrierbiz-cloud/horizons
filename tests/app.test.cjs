@@ -599,18 +599,23 @@ async function drag(page, fromSel, toSel, toOffset) {
     ok((await page.$$("#main a.g-card")).length === 8, "les écrans, avec leurs liens");
     await page.click('[data-act="gspace"]'); await page.waitForTimeout(150);
     let s = await st(page);
-    const ag = s.spaces.find((x) => x.name === "Agence");
-    ok(ag && s.spaces.length === 2, "espace « Agence » créé");
+    const bz = s.spaces.find((x) => x.name === "Business");
+    ok(bz && s.spaces.length === 2, "espace « Business » créé");
     ok(!(await page.$('[data-act="gspace"]')), "étape marquée faite");
-    await page.click('[data-act="gdeals"]'); await page.waitForTimeout(250);
+    await page.click('[data-act="gboard"][data-board="produits"]'); await page.waitForTimeout(250);
     s = await st(page);
-    const deals = s.boards.find((b) => b.name === "Deals");
-    ok(deals && deals.spaceId === ag.id && deals.lists.map((l) => l.name).join() === "Prospects,En discussion,Signés,En production,Livrés", "tableau « Deals » en cinq étapes, dans l'espace Agence");
-    ok(await page.evaluate((id) => location.hash === "#/b/" + id, deals.id) && (await page.$$("#main .col.list")).length === 5, "tableau ouvert");
+    const prod = s.boards.find((b) => b.name === "Produits");
+    ok(prod && prod.spaceId === bz.id && prod.lists.map((l) => l.name).join() === "Idées,En préparation,En ligne,Qui se vendent", "tableau « Produits » en quatre étapes, dans l'espace Business");
+    ok(await page.evaluate((id) => location.hash === "#/b/" + id, prod.id) && (await page.$$("#main .col.list")).length === 4, "tableau ouvert");
     await nav(page, "#/guide");
-    await page.click('[data-act="gdeals"]').catch(() => {});
-    ok((await st(page)).boards.filter((b) => b.name === "Deals").length === 1, "pas de second tableau « Deals »");
+    ok(!(await page.$('[data-act="gboard"][data-board="produits"]')) && await page.$('#main a[href="#/b/' + prod.id + '"]'), "pas de second tableau « Produits » : lien vers l'existant");
+    await page.click('[data-act="gboard"][data-board="apprendre"]'); await page.waitForTimeout(250);
+    ok((await st(page)).boards.some((b) => b.name === "Apprendre" && b.spaceId === bz.id), "tableau « Apprendre » créé");
     await nav(page, "#/guide");
+    ok(/pas encore activée/.test(await page.textContent("#main")), "synchronisation : pas encore activée");
+    await page.click('[data-act="gsettings"]'); await page.waitForTimeout(250);
+    ok(await page.isVisible("#sheetBody #syEmail"), "« Activer la synchronisation » ouvre les Réglages");
+    await page.click("#sheetClose"); await page.waitForTimeout(300);
     await page.click('[data-act="grevue"]'); await page.waitForTimeout(200);
     ok(/Revue hebdomadaire/.test(await page.textContent("#sheetTitle")), "revue hebdomadaire proposée");
     await page.click("#cGo"); await page.waitForTimeout(250);
@@ -623,6 +628,196 @@ async function drag(page, fromSel, toSel, toOffset) {
     ok(!(await page.isVisible("#sheet.on")) && /Mode d'emploi/.test(await page.textContent("#main h1")), "depuis l'aide des raccourcis");
     ok(errors.length === 0, "aucune erreur JS (guide) " + errors.join(" | "));
     await ctx.close();
+  }
+
+  /* ── 11 ter. Synchronisation (Supabase simulé, deux appareils) ── */
+  section("synchronisation");
+  {
+    const SB = "https://grgflajplpeszxrqhmwj.supabase.co";
+    const db = { users: new Map(), docs: new Map(), tokens: new Map(), calls: [], bumpNext: null };
+    const userById = (id) => [...db.users.values()].find((u) => u.id === id);
+    const session = (u) => {
+      const at = "at-" + Math.random().toString(36).slice(2), rt = "rt-" + Math.random().toString(36).slice(2);
+      db.tokens.set(at, u.id); db.tokens.set("r:" + rt, u.id);
+      return { access_token: at, refresh_token: rt, expires_in: 3600, token_type: "bearer", user: { id: u.id, email: u.email } };
+    };
+    const handler = async (route) => {
+      const req = route.request(), url = new URL(req.url()), method = req.method();
+      const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" };
+      const json = (status, data) => route.fulfill({ status, headers: Object.assign({ "content-type": "application/json" }, cors), body: data === undefined ? "" : JSON.stringify(data) });
+      if (method === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+      db.calls.push(method + " " + url.pathname + url.search);
+      let body = null; try { body = req.postData() ? JSON.parse(req.postData()) : null; } catch (e) { body = null; }
+      const tok = (req.headers()["authorization"] || "").replace("Bearer ", ""), uid = db.tokens.get(tok);
+      if (url.pathname === "/auth/v1/signup") {
+        if (!db.users.has(body.email)) db.users.set(body.email, { id: "u-" + (db.users.size + 1), email: body.email, password: body.password, confirmed: false });
+        const u = db.users.get(body.email);
+        return json(200, { id: u.id, email: u.email });
+      }
+      if (url.pathname === "/auth/v1/token") {
+        if (url.searchParams.get("grant_type") === "password") {
+          const u = db.users.get(body.email);
+          if (!u || u.password !== body.password) return json(400, { error_code: "invalid_credentials", msg: "Invalid login credentials" });
+          if (!u.confirmed) return json(400, { error_code: "email_not_confirmed", msg: "Email not confirmed" });
+          return json(200, session(u));
+        }
+        const id = db.tokens.get("r:" + body.refresh_token);
+        return id ? json(200, session(userById(id))) : json(400, { error_code: "refresh_token_not_found" });
+      }
+      if (url.pathname === "/auth/v1/user") {
+        if (!uid) return json(401, { msg: "invalid JWT" });
+        const u = userById(uid); if (method === "PUT") u.password = body.password;
+        return json(200, { id: u.id, email: u.email });
+      }
+      if (url.pathname === "/auth/v1/logout" || url.pathname === "/auth/v1/recover") return json(200, {});
+      if (url.pathname === "/rest/v1/horizons_docs") {
+        if (!uid) return json(401, { message: "JWT expired" });
+        const who = (url.searchParams.get("user_id") || "").replace("eq.", "");
+        if (method === "GET") {
+          const row = who === uid ? db.docs.get(uid) : null;
+          return json(200, row ? [url.searchParams.get("select") === "rev" ? { rev: row.rev } : { doc: row.doc, rev: row.rev }] : []);
+        }
+        if (method === "POST") {
+          if (body.user_id !== uid) return json(403, { code: "42501", message: "row-level security" });
+          if (db.docs.has(uid)) return json(409, { code: "23505", message: "duplicate key" });
+          db.docs.set(uid, { doc: body.doc, rev: 1 });
+          return json(201);
+        }
+        if (method === "PATCH") {
+          const row = db.docs.get(uid);
+          if (row && db.bumpNext) { const f = db.bumpNext; db.bumpNext = null; f(row); }   // un autre appareil écrit juste avant
+          const want = +(url.searchParams.get("rev") || "").replace("eq.", "");
+          if (!row || who !== uid || row.rev !== want) return json(200, []);
+          if (body.rev !== row.rev + 1) return json(400, { code: "40001" });
+          row.doc = body.doc; row.rev = body.rev;
+          return json(200, [{ rev: row.rev }]);
+        }
+      }
+      return json(404, { message: "inconnu" });
+    };
+    const device = async (seed, mobile) => {
+      const ctx = await browser.newContext(mobile ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 } });
+      const net = { off: false };   // coupure du réseau vers le serveur, pour cet appareil seulement
+      await ctx.route(SB + "/**", (route) => (net.off ? route.abort("internetdisconnected") : handler(route)));
+      ctx.on("request", (r) => { const u = r.url(); if (!u.startsWith(new URL(U).origin) && !u.startsWith(SB) && !u.startsWith("data:") && !u.startsWith("blob:")) outside.push(u); });
+      const page = await ctx.newPage();
+      const errors = [];
+      page.on("pageerror", (e) => errors.push(String(e)));
+      page.on("console", (m) => { if (m.type() === "error" && !/net::|ERR_|Failed to load resource/.test(m.text())) errors.push(m.text()); });
+      await page.goto(U);
+      if (seed) { await page.evaluate((s) => { localStorage.setItem("horizons-v1", JSON.stringify(s)); localStorage.setItem("horizons-ui-v1", JSON.stringify({ space: "sp" })); }, seed); await page.reload(); }
+      await page.waitForTimeout(250);
+      return { ctx, page, errors, net };
+    };
+    const until = async (page, fn, arg, ms) => { try { await page.waitForFunction(fn, arg, { timeout: ms || 6000, polling: 100 }); return true; } catch (e) { return false; } };
+    const titles = async (page) => (await st(page)).items.map((x) => x.title);
+    const serverTitles = () => { const r = [...db.docs.values()][0]; return r ? r.doc.items.map((x) => x.title) : []; };
+    const openSync = async (page) => { await page.click('#sidebar [data-sb="settings"]'); await page.waitForTimeout(250); };
+    const login = async (page, act) => {
+      await page.fill("#syEmail", "johan@exemple.fr"); await page.fill("#syPass", "un-mot-de-passe");
+      await page.click('#sheetBody [data-sy="' + (act || "in") + '"]'); await page.waitForTimeout(400);
+    };
+    const wake = (page) => page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+
+    // Appareil A : des données, puis création du compte et connexion
+    const A = await device(seedWith([{ id: "a1", title: "Écrire le chapitre 1", h: "day", key: T }, { id: "a2", title: "Courir", h: "day", key: T, order: 1 }]));
+    ok(!A.errors.length && (await A.page.evaluate(() => document.body.dataset.sync)) === "off", "sans compte : synchronisation éteinte");
+    ok(!db.calls.length, "sans compte : aucune requête au serveur");
+    await openSync(A.page);
+    await login(A.page, "up");
+    ok(/mail de confirmation/.test(await A.page.textContent("#toastMsg")), "création du compte : confirmer l'adresse");
+    await login(A.page, "in");
+    ok(/pas encore confirmée/.test(await A.page.textContent("#toastMsg")), "adresse non confirmée : message clair");
+    db.users.get("johan@exemple.fr").confirmed = true;
+    await login(A.page, "in");
+    ok(await until(A.page, () => /Synchronisé/.test((document.querySelector("#syState") || {}).textContent || "")), "connecté et synchronisé");
+    ok(serverTitles().includes("Écrire le chapitre 1") && serverTitles().length === 2, "premier envoi : le serveur a les données de A");
+    ok(/johan@exemple\.fr/.test(await A.page.textContent("#sheetBody")), "compte affiché dans les Réglages");
+    await A.page.click("#sheetClose"); await A.page.waitForTimeout(300);
+
+    // Appareil B, neuf (téléphone) : il reprend les données du compte sans question
+    const B = await device(null, true);
+    await B.page.tap("#menuBtn"); await B.page.waitForTimeout(300);
+    await B.page.tap('#sidebar [data-sb="settings"]'); await B.page.waitForTimeout(300);
+    await login(B.page, "in");
+    ok(await until(B.page, () => JSON.parse(localStorage.getItem("horizons-v1")).items.some((x) => x.title === "Courir")), "appareil neuf : il reçoit les données du compte");
+    ok((await st(B.page)).spaces.length === 1, "pas d'espace en double sur l'appareil neuf");
+    await B.page.tap("#sheetClose"); await B.page.waitForTimeout(300);
+
+    // A ajoute, B reçoit
+    await A.page.click('[data-col="day|' + T + '"] .add-btn');
+    await A.page.keyboard.type("Depuis l'ordinateur"); await A.page.keyboard.press("Enter"); await A.page.keyboard.press("Escape");
+    ok(await until(A.page, () => true, null, 100) && await (async () => { for (let i = 0; i < 40; i++) { if (serverTitles().includes("Depuis l'ordinateur")) return true; await A.page.waitForTimeout(100); } return false; })(), "ajout sur A : envoyé au serveur");
+    await wake(B.page);
+    ok(await until(B.page, () => !!document.querySelector("#main") && /Depuis l'ordinateur/.test(document.querySelector("#main").textContent)), "B le reçoit et l'affiche");
+
+    // Hors connexion sur B, modification sur les deux, puis retour du réseau : tout se fusionne
+    B.net.off = true;
+    await B.page.tap('.it[data-id="a2"] .check'); await B.page.waitForTimeout(2200);
+    ok((await B.page.evaluate(() => document.body.dataset.sync)) === "offline", "B hors connexion : état affiché");
+    ok(![...db.docs.values()][0].doc.items.find((x) => x.id === "a2").done, "hors connexion : rien n'est parti");
+    await A.page.click('.it[data-id="a1"] .check');
+    ok(await (async () => { for (let i = 0; i < 40; i++) { const r = [...db.docs.values()][0]; if (r.doc.items.find((x) => x.id === "a1").done) return true; await A.page.waitForTimeout(100); } return false; })(), "A coche a1 : envoyé");
+    B.net.off = false;
+    await B.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    ok(await until(B.page, () => { const d = JSON.parse(localStorage.getItem("horizons-v1")); const f = (id) => d.items.find((x) => x.id === id).done; return f("a1") && f("a2"); }), "retour du réseau : B a les deux coches");
+    await wake(A.page);
+    ok(await until(A.page, () => JSON.parse(localStorage.getItem("horizons-v1")).items.find((x) => x.id === "a2").done), "A reçoit la coche faite hors connexion sur B");
+
+    // Conflit : un autre appareil écrit entre la lecture et l'envoi ; on refait la fusion
+    const before = db.calls.filter((c) => c.startsWith("PATCH")).length;
+    db.bumpNext = (row) => { row.doc.items.push(Object.assign({}, row.doc.items[0], { id: "x9", title: "Écrit ailleurs", done: false })); row.rev += 1; };
+    await A.page.click('[data-col="day|' + T + '"] .add-btn');
+    await A.page.keyboard.type("Pendant le conflit"); await A.page.keyboard.press("Enter"); await A.page.keyboard.press("Escape");
+    ok(await (async () => { for (let i = 0; i < 50; i++) { const t = serverTitles(); if (t.includes("Pendant le conflit") && t.includes("Écrit ailleurs")) return true; await A.page.waitForTimeout(100); } return false; })(), "conflit : rien n'est perdu, ni d'un côté ni de l'autre");
+    ok(db.calls.filter((c) => c.startsWith("PATCH")).length >= before + 2, "conflit : l'envoi a été refait");
+    ok((await titles(A.page)).includes("Écrit ailleurs"), "conflit : A récupère ce qui a été écrit ailleurs");
+
+    // Suppression sur B : elle disparaît aussi sur A
+    await wake(B.page);
+    await until(B.page, () => JSON.parse(localStorage.getItem("horizons-v1")).items.some((x) => x.title === "Pendant le conflit"));
+    const delId = (await st(B.page)).items.find((x) => x.title === "Depuis l'ordinateur").id;
+    await B.page.tap('.it[data-id="' + delId + '"] .it-body'); await B.page.waitForTimeout(400);
+    await B.page.tap('#sheetBody [data-act="del"]'); await B.page.waitForTimeout(200);
+    await B.page.tap('#dialog [data-i="0"]'); await B.page.waitForTimeout(400);
+    ok(await (async () => { for (let i = 0; i < 40; i++) { if (!serverTitles().includes("Depuis l'ordinateur")) return true; await B.page.waitForTimeout(100); } return false; })(), "suppression sur B : retirée du serveur");
+    await wake(A.page);
+    ok(await until(A.page, (id) => !JSON.parse(localStorage.getItem("horizons-v1")).items.some((x) => x.id === id), delId), "suppression reçue sur A");
+
+    // Retour d'un mail de confirmation : la session arrive dans l'adresse
+    const C = await device(null);
+    const tok = session(db.users.get("johan@exemple.fr"));
+    await C.page.goto(U + "?mail=1#access_token=" + tok.access_token + "&refresh_token=" + tok.refresh_token + "&expires_in=3600&token_type=bearer&type=signup");
+    ok(await until(C.page, () => location.hash === "#/horizons" && JSON.parse(localStorage.getItem("horizons-v1")).items.some((x) => x.title === "Pendant le conflit")), "lien du mail : connecté, adresse nettoyée, données reçues");
+    ok(!(await C.page.evaluate(() => location.href)).includes("access_token"), "le jeton ne reste pas dans l'adresse");
+
+    // Déconnexion : les données restent, plus rien ne part
+    await B.page.tap("#menuBtn"); await B.page.waitForTimeout(300);
+    await B.page.tap('#sidebar [data-sb="settings"]'); await B.page.waitForTimeout(300);
+    await B.page.tap('#sheetBody [data-sy="out"]'); await B.page.waitForTimeout(300);
+    ok(await B.page.isVisible("#sheetBody #syEmail") && !(await B.page.evaluate(() => localStorage.getItem("horizons-sync-v1"))), "déconnecté : session effacée");
+    ok((await st(B.page)).items.length >= 3, "déconnecté : les données restent sur l'appareil");
+    const n = db.calls.length;
+    await B.page.tap("#sheetClose"); await B.page.waitForTimeout(300);
+    await B.page.tap('.it[data-id="a1"] .check'); await B.page.waitForTimeout(2000);
+    ok(db.calls.length === n, "déconnecté : plus aucune requête");
+
+    // Fusion : propriétés de base, vérifiées dans le navigateur
+    const props = await A.page.evaluate(async () => {
+      const M = await import("./js/sync-merge.js");
+      const base = (t, x) => ({ items: [{ id: "i", title: t }].concat(x || []), spaces: [], boards: [], climbs: [], runs: [], settings: {} });
+      const a = Object.assign(base("ancien"), { stamps: { "item:i": 100 } }), b = Object.assign(base("récent"), { stamps: { "item:i": 200 } });
+      const m1 = M.mergeDocs(a, b, 1e12), m2 = M.mergeDocs(b, a, 1e12);
+      const del = M.mergeDocs(Object.assign(base("x"), { stamps: { "item:i": 100 } }), { items: [], spaces: [], boards: [], climbs: [], runs: [], settings: {}, gone: { "item:i": 150 } }, 1e12);
+      const keep = M.mergeDocs(Object.assign(base("x"), { stamps: { "item:i": 300 } }), { items: [], spaces: [], boards: [], climbs: [], runs: [], settings: {}, gone: { "item:i": 150 } }, 1e12);
+      const t1 = M.mergeDocs(base("a"), base("b"), 1e12), t2 = M.mergeDocs(base("b"), base("a"), 1e12);
+      return { lww: m1.items[0].title === "récent", comm: M.fingerprint(m1) === M.fingerprint(m2), del: del.items.length === 0, keep: keep.items.length === 1, tie: M.fingerprint(t1) === M.fingerprint(t2) };
+    });
+    ok(props.lww, "fusion : la version modifiée le plus récemment l'emporte");
+    ok(props.comm && props.tie, "fusion : même résultat dans les deux sens, même à égalité");
+    ok(props.del && props.keep, "fusion : une suppression postérieure l'emporte, une modification postérieure aussi");
+    ok(!A.errors.length && !B.errors.length && !C.errors.length, "aucune erreur JS (synchro) " + A.errors.concat(B.errors, C.errors).join(" | "));
+    await A.ctx.close(); await B.ctx.close(); await C.ctx.close();
   }
 
   /* ── 12. Téléphone : tiroir, appui long, balayage, fiche ── */

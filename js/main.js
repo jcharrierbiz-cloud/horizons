@@ -21,6 +21,7 @@ import * as PV from "./views/progress.js";
 import * as SV from "./views/search.js";
 import * as LV from "./views/life.js";
 import * as GV from "./views/guide.js";
+import * as SY from "./sync.js";
 
 /* ── Route ── */
 function route() {
@@ -145,7 +146,7 @@ function renderSidebar() {
     + rl("#/search", icon("search"), "Recherche")
     + '<span class="rl-gap"></span>'
     + rl("#/guide", icon("help"), "Mode d'emploi")
-    + '<button class="rl" data-sb="settings" title="Réglages">' + icon("settings") + '<span class="rl-t">Réglages</span></button>'
+    + '<button class="rl" data-sb="settings" title="Réglages">' + icon("settings") + '<span class="rl-t">Réglages</span><i class="sync-dot" aria-hidden="true"></i></button>'
     + '<button class="rl" data-sb="export" title="Sauvegarder">' + icon("download") + '<span class="rl-t">Sauvegarder</span></button>'
     + "</div>"
     + '<div class="sb-panel"><div class="brand"><b>Horizons</b></div>'
@@ -209,7 +210,7 @@ async function onMainClick(e) {
   if (r.view === "b" && await BV.onAct(act, b, m, r.arg)) return;
   if ((r.view === "cal" || r.view === "day") && CV.onAct(act, b, m)) return;
   if (r.view === "life" && LV.onAct(act, b, m)) return;
-  if (r.view === "guide" && await GV.onAct(act, b, m, { exportData })) return;
+  if (r.view === "guide" && await GV.onAct(act, b, m, { exportData, openSettings })) return;
   if (r.view === "climbs" && await KV.onAct(act, b)) return;
   if (r.view === "search") SV.onAct(act);
 }
@@ -277,7 +278,8 @@ let installEvt = null;
 function openSettings() {
   const st = S.state.settings;
   const notif = "Notification" in window ? Notification.permission : "absent";
-  const html = '<div class="f-sec"><div class="lbl">Apparence</div><div class="seg">'
+  const html = SY.settingsHtml()
+    + '<div class="f-sec"><div class="lbl">Apparence</div><div class="seg">'
     + [["light", "Clair"], ["dark", "Sombre"], ["system", "Système"]].map(([v, l]) => '<button data-theme="' + v + '" aria-pressed="' + (ui.theme === v) + '">' + l + "</button>").join("") + "</div></div>"
     + '<div class="f-sec"><div class="lbl">Fond d\'écran</div><div class="walls">'
     + WALLS.map(([v, l]) => '<button class="wall-sw" data-wall="' + v + '" data-w="' + v + '" aria-pressed="' + ((ui.wall || "") === v) + '"><span>' + l + "</span></button>").join("")
@@ -297,7 +299,9 @@ function openSettings() {
       : notif === "denied" ? "Notifications refusées pour ce site : les rappels s'affichent dans l'application." : notif === "absent" ? "Ce navigateur ne gère pas les notifications : les rappels s'affichent dans l'application." : "Autorise les notifications pour être prévenu à l'heure d'un rappel.") + "</p>"
     + (notif === "default" ? '<button class="btn ghost sm" data-set="notif">' + icon("bell") + "Autoriser les notifications</button>" : "") + "</div>"
     + '<div class="f-sec"><div class="lbl">Données</div><p class="hint">' + (storageOK
-      ? "Tout vit dans ce navigateur, sur cet appareil, et nulle part ailleurs. Exporte de temps en temps : vider le cache du navigateur efface tout. Pour passer d'un appareil à l'autre, exporte ici et importe là-bas."
+      ? (SY.account()
+        ? "Tes données vivent sur cet appareil et, synchronisées, sur le serveur de ton compte. Exporte de temps en temps pour garder une copie à toi."
+        : "Tout vit dans ce navigateur, sur cet appareil, et nulle part ailleurs. Exporte de temps en temps : vider le cache du navigateur efface tout. Pour passer d'un appareil à l'autre, active la synchronisation ci-dessus.")
       : "<b>Stockage local indisponible ici : rien ne survivra à la fermeture.</b> Exporte à la main.") + "</p>"
     + '<div class="f-acts"><button class="btn ghost sm" data-set="export">' + icon("download") + 'Exporter</button><button class="btn ghost sm" data-set="import">' + icon("upload") + "Importer</button>"
     + '<button class="btn ghost sm danger-t" data-set="reset">Tout effacer</button></div><input type="file" id="impFile" accept="application/json,.json" hidden></div>'
@@ -305,8 +309,20 @@ function openSettings() {
     + '<button class="btn ghost sm" data-set="keys">' + icon("keyboard") + "Raccourcis clavier</button>"
     + (installEvt ? '<button class="btn ghost sm" data-set="install">Installer l\'application</button>' : "") + "</div></div>";
   const body = openSheet("Réglages", html, {});
+  body.onkeydown = async (e) => {
+    if (e.key !== "Enter" || !["syEmail", "syPass", "syNew"].includes(e.target.id)) return;
+    e.preventDefault();
+    await SY.onSettings(e.target.id === "syNew" ? "setpw" : "in", body);
+    if (isSheetOpen()) openSettings();
+  };
   body.onclick = async (e) => {
     const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.sy) {
+      b.disabled = true;
+      await SY.onSettings(b.dataset.sy, body);
+      if (isSheetOpen()) openSettings();
+      return;
+    }
     if (b.dataset.theme) { ui.theme = b.dataset.theme; saveUI(true); applyTheme(); openSettings(); return; }
     if (b.dataset.wall != null) {
       if (b.dataset.wall === "custom") { $("#wallFile").click(); return; }
@@ -338,7 +354,8 @@ function openSettings() {
     if (a === "export") exportData();
     if (a === "import") importData();
     if (a === "reset") {
-      if (!await ask("Tout effacer : éléments, tableaux, espaces, ascensions ? Pense à exporter avant.", [{ v: true, label: "Tout effacer", kind: "danger" }])) return;
+      if (!await ask("Tout effacer : éléments, tableaux, espaces, ascensions ? Pense à exporter avant." + (SY.account() ? " Avec la synchronisation, c'est effacé aussi sur tes autres appareils." : ""),
+        [{ v: true, label: "Tout effacer", kind: "danger" }])) return;
       const backup = deepCopy(S.state);
       replaceState(seed(), false); closeSheet();
       toast("Tout a été effacé", () => replaceState(backup, false));
@@ -399,7 +416,8 @@ function importData() {
   const apply = async (txt) => {
     let d; try { d = JSON.parse(txt); } catch (err) { toast("Fichier illisible : ce n'est pas une sauvegarde Horizons."); return; }
     if (!d || typeof d !== "object" || !Array.isArray(d.items)) { toast("Ce fichier n'est pas une sauvegarde Horizons."); return; }
-    if (!await ask("Remplacer tout le contenu actuel par cette sauvegarde (" + plural(d.items.length, "élément") + ") ?", [{ v: true, label: "Remplacer", kind: "danger" }])) return;
+    if (!await ask("Remplacer tout le contenu actuel par cette sauvegarde (" + plural(d.items.length, "élément") + ") ?"
+      + (SY.account() ? " Avec la synchronisation, tes autres appareils aussi." : ""), [{ v: true, label: "Remplacer", kind: "danger" }])) return;
     const backup = deepCopy(S.state);
     replaceState(d, false); closeSheet();
     toast("Sauvegarde importée", () => replaceState(backup, false));
@@ -567,8 +585,11 @@ function start() {
   window.addEventListener("resize", () => scheduleRender());
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); scheduleRender(); } });
 
+  SY.captureRedirect();   // retour d'un mail de confirmation : la session est dans l'adresse, retirée aussitôt
   if (!location.hash) history.replaceState(null, "", ui.lastRoute || "#/horizons");
   renderNow();
+  SY.initSync();
+  SY.onStatus(() => { if (route().view === "guide") scheduleRender(); });
   runCarry();
   tick();
   setInterval(tick, 30000);

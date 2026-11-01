@@ -1,13 +1,13 @@
 /* Horizons — service worker : l'application s'ouvre et fonctionne hors connexion. */
 "use strict";
 
-var VERSION = "horizons-1.2.0";
+var VERSION = "horizons-1.3.0";
 var CORE = [
   "./", "./index.html", "./app.css", "./manifest.webmanifest",
   "./icon.svg", "./icon-180.png", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png",
   "./fonts/inter-latin.woff2", "./fonts/inter-latin-ext.woff2",
   "./js/main.js", "./js/util.js", "./js/dates.js", "./js/store.js", "./js/items.js", "./js/md.js",
-  "./js/ui.js", "./js/dnd.js", "./js/render.js", "./js/sheet-item.js",
+  "./js/ui.js", "./js/dnd.js", "./js/render.js", "./js/sheet-item.js", "./js/sync.js", "./js/sync-merge.js",
   "./js/views/horizons.js", "./js/views/board.js", "./js/views/calendar.js",
   "./js/views/climbs.js", "./js/views/progress.js", "./js/views/search.js", "./js/views/life.js", "./js/views/guide.js"
 ];

@@ -4,8 +4,9 @@ Planifier du jour à la vie. Chaque horizon — jour, semaine, mois, trimestre,
 année, décennie, vie — a sa colonne ; on y pose ses objectifs, on rattache le
 petit au grand, on glisse ce qui bouge.
 
-Application web autonome : pas de compte, pas de serveur, pas de dépendance.
-Les données restent dans le navigateur de l'appareil. Elle s'installe comme une
+Application web autonome, sans dépendance ni compilation. Les données vivent
+dans le navigateur de l'appareil ; avec un compte, elles se synchronisent entre
+appareils par un projet Supabase hébergé à Paris. Elle s'installe comme une
 application (téléphone et ordinateur) et fonctionne hors connexion.
 
 ## Ce qu'elle fait
@@ -44,9 +45,12 @@ application (téléphone et ordinateur) et fonctionne hors connexion.
   de l'appareil), **export / import / tout effacer** avec annulation.
 - **Glisser-déposer** à la souris, ou au doigt par appui long (un balayage reste
   un défilement).
+- **Synchronisation** entre appareils (Réglages → Synchronisation) : compte par
+  adresse et mot de passe, fusion élément par élément (la modification la plus
+  récente l'emporte, les suppressions se propagent), hors connexion toléré.
 - **Mode d'emploi** intégré (`#/guide`) : l'idée, les écrans, les gestes, un
-  démarrage guidé en cinq étapes (espace « Agence », tableau « Deals », revue
-  hebdomadaire) et la marche à suivre avec plusieurs appareils.
+  démarrage guidé en cinq étapes (espace « Business », tableaux « Produits » et
+  « Apprendre », revue hebdomadaire) et la synchronisation.
 
 ### Raccourcis clavier
 
@@ -85,10 +89,30 @@ L'application doit être servie par un serveur (même local) : ouverte en
 
 ## Données
 
-Tout est enregistré dans le stockage local du navigateur, sur l'appareil, et
-nulle part ailleurs. Vider les données du site efface tout : exporter
-régulièrement (Réglages → Exporter, ou « Sauvegarder » dans la barre latérale).
-Pour passer d'un appareil à l'autre : exporter ici, importer là-bas.
+Tout est enregistré dans le stockage local du navigateur. Sans compte, rien ne
+quitte l'appareil : l'application ne contacte aucun autre site.
+
+Avec un compte, le document est aussi gardé dans un projet Supabase
+(`grgflajplpeszxrqhmwj`, région eu-west-3, Paris) :
+
+- une ligne par compte dans `horizons_docs` (document JSON + révision) ; le
+  schéma est dans `supabase/migrations/` ;
+- seul le premier compte dont l'adresse est confirmée peut y écrire, et chacun
+  ne lit que sa ligne (RLS) ; une écriture faite sur une révision périmée est
+  refusée, l'application relit, refait la fusion et renvoie ;
+- chaque entité porte l'heure de sa dernière modification (`stamps`) et chaque
+  suppression une pierre tombale (`gone`, oubliée après 120 jours) :
+  `js/sync-merge.js` fusionne deux versions de façon identique sur tous les
+  appareils.
+
+Dans le projet Supabase, *Authentication → URL Configuration → Site URL* doit
+pointer vers l'adresse publiée de l'application : c'est là que ramènent les
+liens des mails (confirmation d'adresse, mot de passe oublié). Sans serveur
+d'envoi personnalisé, Supabase n'envoie ces mails qu'aux membres de
+l'organisation.
+
+Exporter de temps en temps garde une copie à soi (Réglages → Exporter, ou
+« Sauvegarder » dans la barre latérale).
 
 ## Tests
 
@@ -102,8 +126,11 @@ npm test
 ordinateur et téléphone : saisie, rattachements, glisser à la souris et au
 doigt, récurrences, report, tableaux, calendrier, grille horaire, ascensions,
 recherche, markdown échappé, espaces, réglages, raccourcis, données abîmées,
-semaines ISO autour du Nouvel An, calendrier de vie, fond d'écran, et absence
-de toute requête hors du site.
+semaines ISO autour du Nouvel An, calendrier de vie, fond d'écran, mode
+d'emploi, synchronisation sur deux appareils (avec un Supabase simulé :
+connexion, envoi, réception, coupure réseau, conflit d'écriture, suppression,
+retour d'un mail, déconnexion) et absence de toute requête hors du site sans
+compte.
 
 ## Structure
 
@@ -116,6 +143,9 @@ js/items.js           éléments : placement, récurrence, report, rattachements
 js/dates.js           périodes (semaines ISO, trimestres, décennies…)
 js/views/*.js         Horizons, tableaux, calendrier, vie, ascensions, progrès, recherche, mode d'emploi
 js/dnd.js             glisser-déposer souris et tactile
+js/sync.js            compte, échanges avec Supabase, réglages de synchronisation
+js/sync-merge.js      fusion de deux versions du document
+supabase/migrations/  schéma et règles d'accès du projet Supabase
 sw.js                 fonctionnement hors connexion
 fonts/                police Inter (SIL Open Font License)
 ```
