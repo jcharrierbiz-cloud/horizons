@@ -1,7 +1,7 @@
 /* Horizons — service worker : l'application s'ouvre et fonctionne hors connexion. */
 "use strict";
 
-var VERSION = "horizons-1.1.0";
+var VERSION = "horizons-1.2.0";
 var CORE = [
   "./", "./index.html", "./app.css", "./manifest.webmanifest",
   "./icon.svg", "./icon-180.png", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png",
@@ -9,7 +9,7 @@ var CORE = [
   "./js/main.js", "./js/util.js", "./js/dates.js", "./js/store.js", "./js/items.js", "./js/md.js",
   "./js/ui.js", "./js/dnd.js", "./js/render.js", "./js/sheet-item.js",
   "./js/views/horizons.js", "./js/views/board.js", "./js/views/calendar.js",
-  "./js/views/climbs.js", "./js/views/progress.js", "./js/views/search.js", "./js/views/life.js"
+  "./js/views/climbs.js", "./js/views/progress.js", "./js/views/search.js", "./js/views/life.js", "./js/views/guide.js"
 ];
 
 self.addEventListener("install", function (e) {

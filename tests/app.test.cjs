@@ -587,6 +587,44 @@ async function drag(page, fromSel, toSel, toOffset) {
     await ctx.close();
   }
 
+  /* ── 11 bis. Mode d'emploi ── */
+  section("mode d'emploi");
+  {
+    const { ctx, page, errors } = await fresh(browser, {}, seedWith([]), { space: "sp" });
+    ok(await page.isVisible('#sidebar a[href="#/guide"]'), "lien « Mode d'emploi » dans le rail");
+    await page.click('#sidebar a[href="#/guide"]'); await page.waitForTimeout(200);
+    ok(/Mode d'emploi/.test(await page.textContent("#main h1")), "écran du mode d'emploi");
+    const heads = await page.$$eval("#main .g-sec h2", (e) => e.map((x) => x.textContent));
+    ok(heads.length === 7 && heads.includes("Plusieurs appareils"), "sept rubriques, dont « Plusieurs appareils » (" + heads + ")");
+    ok((await page.$$("#main a.g-card")).length === 8, "les écrans, avec leurs liens");
+    await page.click('[data-act="gspace"]'); await page.waitForTimeout(150);
+    let s = await st(page);
+    const ag = s.spaces.find((x) => x.name === "Agence");
+    ok(ag && s.spaces.length === 2, "espace « Agence » créé");
+    ok(!(await page.$('[data-act="gspace"]')), "étape marquée faite");
+    await page.click('[data-act="gdeals"]'); await page.waitForTimeout(250);
+    s = await st(page);
+    const deals = s.boards.find((b) => b.name === "Deals");
+    ok(deals && deals.spaceId === ag.id && deals.lists.map((l) => l.name).join() === "Prospects,En discussion,Signés,En production,Livrés", "tableau « Deals » en cinq étapes, dans l'espace Agence");
+    ok(await page.evaluate((id) => location.hash === "#/b/" + id, deals.id) && (await page.$$("#main .col.list")).length === 5, "tableau ouvert");
+    await nav(page, "#/guide");
+    await page.click('[data-act="gdeals"]').catch(() => {});
+    ok((await st(page)).boards.filter((b) => b.name === "Deals").length === 1, "pas de second tableau « Deals »");
+    await nav(page, "#/guide");
+    await page.click('[data-act="grevue"]'); await page.waitForTimeout(200);
+    ok(/Revue hebdomadaire/.test(await page.textContent("#sheetTitle")), "revue hebdomadaire proposée");
+    await page.click("#cGo"); await page.waitForTimeout(250);
+    ok((await st(page)).runs.some((r) => r.climbId === "b-revue"), "revue hebdomadaire lancée");
+    await page.click('[data-act="gexport"]'); await page.waitForTimeout(200);
+    ok(/Exporter/.test(await page.textContent("#sheetTitle")), "export depuis le mode d'emploi");
+    await page.click("#sheetClose"); await page.waitForTimeout(300);
+    await page.keyboard.press("?"); await page.waitForTimeout(200);
+    await page.click('#sheetBody [data-x="guide"]'); await page.waitForTimeout(300);
+    ok(!(await page.isVisible("#sheet.on")) && /Mode d'emploi/.test(await page.textContent("#main h1")), "depuis l'aide des raccourcis");
+    ok(errors.length === 0, "aucune erreur JS (guide) " + errors.join(" | "));
+    await ctx.close();
+  }
+
   /* ── 12. Téléphone : tiroir, appui long, balayage, fiche ── */
   section("téléphone");
   {

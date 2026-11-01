@@ -44,6 +44,9 @@ application (téléphone et ordinateur) et fonctionne hors connexion.
   de l'appareil), **export / import / tout effacer** avec annulation.
 - **Glisser-déposer** à la souris, ou au doigt par appui long (un balayage reste
   un défilement).
+- **Mode d'emploi** intégré (`#/guide`) : l'idée, les écrans, les gestes, un
+  démarrage guidé en cinq étapes (espace « Agence », tableau « Deals », revue
+  hebdomadaire) et la marche à suivre avec plusieurs appareils.
 
 ### Raccourcis clavier
 
@@ -111,7 +114,7 @@ js/main.js            navigation, barre latérale, saisie, raccourcis, réglages
 js/store.js           document de données, sauvegarde locale, rendus, annulation
 js/items.js           éléments : placement, récurrence, report, rattachements
 js/dates.js           périodes (semaines ISO, trimestres, décennies…)
-js/views/*.js         Horizons, tableaux, calendrier, vie, ascensions, progrès, recherche
+js/views/*.js         Horizons, tableaux, calendrier, vie, ascensions, progrès, recherche, mode d'emploi
 js/dnd.js             glisser-déposer souris et tactile
 sw.js                 fonctionnement hors connexion
 fonts/                police Inter (SIL Open Font License)

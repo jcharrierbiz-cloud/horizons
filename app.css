@@ -406,6 +406,30 @@ body.resizing { cursor: ns-resize; -webkit-user-select: none; user-select: none;
 .life-goals { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px; max-width: 1000px; }
 .life-goals .col { padding: 0; border: 0; }
 
+/* ── Mode d'emploi ── */
+.guide { max-width: 800px; padding-bottom: 40px; }
+.g-sec { margin-top: 34px; }
+.g-sec h2 { font-size: 22px; font-weight: 750; letter-spacing: -.02em; margin-bottom: 10px; }
+.g-sec p, .g-sec li { font-size: 15px; line-height: 1.6; }
+.g-sec p + p, .g-sec p + ul, .g-sec ul + p { margin-top: 8px; }
+.g-sec ul { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.g-sec code { font-family: var(--mono); font-size: 13px; background: var(--hover); padding: 1px 5px; border-radius: 4px; }
+.g-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.g-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); font-size: 13px; color: var(--mute); line-height: 1.45; }
+a.g-card:hover { background: var(--hover); }
+.g-card .ic { width: 18px; height: 18px; margin-top: 1px; color: var(--ink); }
+.g-card b { display: block; font-size: 14.5px; color: var(--ink); margin-bottom: 1px; }
+.guide .keys td { font-size: 14px; vertical-align: top; }
+.guide .keys td:first-child { width: 170px; font-weight: 600; }
+.g-steps { list-style: none; counter-reset: g; display: flex; flex-direction: column; gap: 16px; padding: 0 !important; }
+.g-steps li { counter-increment: g; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; align-items: start; }
+.g-steps li::before { content: counter(g); width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; margin-top: 1px; }
+.g-act { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+.g-act .chip.ok { font-size: 12.5px; padding: 2px 9px; }
+.g-warn { border-left: 3px solid var(--now); background: color-mix(in srgb, var(--now) 7%, transparent); border-radius: 0 var(--r-lg) var(--r-lg) 0; padding: 14px 18px; }
+body[data-wall] .guide { background: color-mix(in srgb, var(--bg) 86%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-radius: 14px; padding: 16px 22px 40px; }
+body[data-wall] .guide .view-h { background: none; padding: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
 /* ── Réglages : fonds d'écran ── */
 .walls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .wall-sw { height: 56px; border-radius: 10px; border: 1px solid var(--line); background: var(--sw, var(--panel-2)); display: flex; align-items: flex-end; padding: 6px 8px; font-size: 12px; font-weight: 600; color: var(--ink); }
@@ -628,6 +652,7 @@ body.resizing { cursor: ns-resize; -webkit-user-select: none; user-select: none;
   .due { top: calc(64px + env(safe-area-inset-top, 0px)); }
   .sides { grid-template-columns: 1fr; }
   .ly-row { grid-template-columns: 40px repeat(10, minmax(0, 1fr)); gap: 2px; }
+  .guide .keys td:first-child { width: 120px; }
   .ly { font-size: 11px; height: 30px; letter-spacing: -.03em; }
   .ly i { display: none; }
   body[data-wall] .board-x > .col { padding: 12px; }
