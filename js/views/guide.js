@@ -80,7 +80,7 @@ export function render(main) {
       ["Déplacer", "Glisser ; au doigt, appui long puis glisser"],
       ["Mettre à une heure", "Glisser sur la grille horaire ; tirer le bas du bloc pour la durée ; toucher une plage libre pour créer"],
       ["Changer de jour", "‹ › sur la pastille, ou <kbd>←</kbd> <kbd>→</kbd> ; <kbd>T</kbd> pour revenir à aujourd'hui"],
-      ["Étiqueter", "Écrire <code>#etsy</code> dans l'intitulé"],
+      ["Étiqueter", "Écrire <code>#projet</code> dans l'intitulé"],
       ["Rechercher", "<kbd>/</kbd> ou <kbd>Ctrl K</kbd> ; <kbd>?</kbd> pour tous les raccourcis"]]
       .map(([a, b]) => "<tr><td>" + a + "</td><td>" + b + "</td></tr>").join("") + "</table></section>"
 
@@ -100,7 +100,7 @@ export function render(main) {
     + "<li><b>Un tableau « Apprendre »</b> pour les livres et les formations : " + BOARDS.apprendre[2].join(" → ") + ". Un livre n'est vraiment fini que quand une idée en est appliquée : écris-la dans sa fiche."
     + '<div class="g-act">' + boardBtn("apprendre") + "</div></li>"
     + "<li><b>Des caps chiffrés</b>, du plus petit au plus grand : première vente, premiers 100 € de bénéfice, premier mois à 1 000 €. Le chiffre de l'année se mérite étape par étape.</li>"
-    + "<li><b>Une étiquette par projet</b> (<code>#etsy</code>, <code>#vidéo</code>…) : la recherche retrouve tout, et Progrès montre où passe ton énergie.</li></ul></section>"
+    + "<li><b>Une étiquette par projet</b> (<code>#vidéo</code>, <code>#lycée</code>…) : la recherche retrouve tout, et Progrès montre où passe ton énergie.</li></ul></section>"
 
     + devices()
 
